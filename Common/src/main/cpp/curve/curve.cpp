@@ -913,6 +913,7 @@ template <class TX,class TY> void JCurve::showlineScan(NVGcontext* avg,const Sca
                 restart=true;
                 }
             if(!restart&&isLowQuality!=wasLowQuality) {
+                nvgLineTo(avg, posx,posy);
                 nvgStroke(avg);
                 nvgStrokeColor(avg, isLowQuality?lowqualcol:*col);
                 nvgFillColor(avg, isLowQuality?lowqualcol:*col);

@@ -154,9 +154,9 @@ uint32_t gettime() const {
     return t;
     };
  uint32_t getid() const {return id;};
- int gettrend() const { return tr&0xFFFF; };
- int getquality() const { return (tr>>16)&0xFFFF; };
- static int32_t encodetr(int trend, int quality) { return (quality<<16)|trend; };
+ int gettrend() const { return static_cast<int>(static_cast<uint32_t>(tr)&0xFFFFu); };
+ int getquality() const { return static_cast<int>((static_cast<uint32_t>(tr)>>16)&0xFFFFu); };
+ static int32_t encodetr(int trend, int quality) { return static_cast<int32_t>(((static_cast<uint32_t>(quality)&0xFFFFu)<<16)|(static_cast<uint32_t>(trend)&0xFFFFu)); };
 bool valid(int pos=1) const {
     if(pos&&!t) {
         ScanData *ht=const_cast<ScanData*>(this);
