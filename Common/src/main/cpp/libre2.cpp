@@ -1389,7 +1389,7 @@ if(alg) {
             }
         else {
             delete alg;
-            LOGSTRING("bad quality\n");
+            LOGSTRING("zero glucose value\n");
             }
         }
 return nullptr;
