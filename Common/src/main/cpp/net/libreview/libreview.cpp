@@ -461,7 +461,7 @@ static int addcurrents(char *&uitptr,time_t nu,const SensorGlucoseData *sens) {
     const ScanData *startstream=sens->beginpolls();
     for(int i=ends;i>=start;i--) {
         const ScanData *el=startstream+i;
-        if(el->current(i)) {
+        if(el->goodCurrent(i)) {
             auto wastime= el->gettime();
             if(wastime<old)
                 return 0;

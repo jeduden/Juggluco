@@ -24,6 +24,7 @@
 #include <math.h>
 #include <algorithm>
 #include <numeric>
+#include <type_traits>
 #include "secs.h"
 #include "SensorGlucoseData.hpp"
 #include "nums/numdata.hpp"
@@ -182,6 +183,7 @@ static bool         wrongNeighbours(const SensorGlucoseData *sens,int startsen,i
         auto it=getdata<DT>(sens,itpos);
         if(it->gettime()<=startInterval)
             break;
+        if constexpr (std::is_same_v<std::remove_const_t<DT>,ScanData>) { if(it->getquality()) continue; }
         const auto val=it->getmgdL();
         if(val<mgdLmin||val>mgdLmax) {
     #ifndef NOLOG
@@ -196,6 +198,7 @@ static bool         wrongNeighbours(const SensorGlucoseData *sens,int startsen,i
         auto it=getdata<DT>(sens,itpos);
             if(it->gettime()>=endInterval)
                 break;
+        if constexpr (std::is_same_v<std::remove_const_t<DT>,ScanData>) { if(it->getquality()) continue; }
         const auto val=it->getmgdL();
         if(val<mgdLmin||val>mgdLmax) {
             LOGGER("wrongNeighbours too large difference between %d and %d diff=%d maxdifference %d\n",val,theval,abs((int)(theval-val)),maxglucosedifference);

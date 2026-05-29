@@ -208,7 +208,7 @@ int addsensorstart(char *buf,uint32_t nu,int mil,SensorGlucoseData *sens)  {
 	time_t start=0;
 	for(int i=0;i<polls.size();i++) {
 		const ScanData &el=polls[i];
-		if(el.current(i)) {
+		if(el.goodCurrent(i)) {
 			start=el.gettime();
 			break;
 			}
@@ -280,7 +280,7 @@ static int sendallcurrent(uint32_t nu,SensorGlucoseData *sens,char *buf,int *las
 	const ScanData *startstream=sens->beginpolls();
 	for(int i=ends;i>=start;i--) {
 		const ScanData *el=startstream+i;
-		if(el->current(i)) {
+		if(el->goodCurrent(i)) {
 			int64_t histor=libreviewSensorNameID(sens);
 			int wrote=addcurrent(buf,histor,el,viewed);
 			return wrote;

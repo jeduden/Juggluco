@@ -170,6 +170,9 @@ bool valid(int pos=1) const {
 bool current(int pos=1) const {
     return valid(pos)&&!isnan(ch);
     }
+bool goodCurrent(int pos=1) const {
+    return current(pos)&&!getquality();
+    }
 float inappunit() const {
        return ::gconvert(g*10);
        }
@@ -1832,12 +1835,17 @@ const ScanData *lastpoll() const {
     return nullptr;
     }
 const ScanData *lastValidStream() const {
+    const ScanData *lowqual=nullptr;
     for(int i=pollcount()-1;i>=0;--i) {
         const ScanData *el= polls.data()+i;
-        if(el->valid())
-                return el;
+        if(el->valid()) {
+                if(!el->getquality())
+                    return el;
+                if(!lowqual)
+                    lowqual=el;
+                }
         }
-    return nullptr;
+    return lowqual;
     }
 const ScanData *getscan(int ind) const {
     return scans.data()+ind;
