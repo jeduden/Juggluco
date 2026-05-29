@@ -941,7 +941,7 @@ template <class TX,class TY> void JCurve::showlineScan(NVGcontext* avg,const Sca
                 nvgFill(avg);
                 nvgBeginPath(avg);
                 nvgMoveTo(avg, posx,posy);
-                startx=posx;starty=posy;
+                startx=starty=-1000.0f;
                 }
 
             wasLowQuality=isLowQuality;
