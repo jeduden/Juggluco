@@ -1064,10 +1064,7 @@ extern "C" JNIEXPORT jlong JNICALL   fromjava(processTooth)(JNIEnv *envin, jclas
         decltype(auto) gluc=algres->currentglucose();
         const uint32_t glval= gluc.getValue();
         const float drate=gluc.rate();
-        if(gluc.getQuality()) {
-            sdata->hist->sensorerror=false;
-            return 1LL;
-            }
+        const bool lowquality=gluc.getQuality()!=0;
         if(jlong res=glucoseback(nu,glval,drate,sdata->hist) ) {
             sensor *senso=sensors->getsensor(sdata->sensorindex);
             sdata->hist->sensorerror=false;
@@ -1080,7 +1077,7 @@ extern "C" JNIEXPORT jlong JNICALL   fromjava(processTooth)(JNIEnv *envin, jclas
             backup->wakebackup(wakestream);
             wakewithcurrent();
 
-            return res;
+            return lowquality?1LL:res;
             }
         }
     else
