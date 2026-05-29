@@ -950,9 +950,13 @@ template <class TX,class TY> void JCurve::showlineScan(NVGcontext* avg,const Sca
             if(glucosepointinfo(avg,tim,glu, posx, posy) ) {
                 nvgLineTo( avg,posx,posy);
                 nvgStroke(avg);
+                nvgStrokeColor(avg, *col);
+                nvgFillColor(avg, *col);
                 nvgBeginPath(avg);
                 nvgCircle(avg, posx,posy,pointRadius*1.3);
                 nvgFill(avg);
+                nvgStrokeColor(avg, isLowQuality?lowqualcol:*col);
+                nvgFillColor(avg, isLowQuality?lowqualcol:*col);
                 nvgBeginPath(avg);
                 nvgMoveTo(avg, posx,posy);
                 lasttouchedcolor=colorindex;
