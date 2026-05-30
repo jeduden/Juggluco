@@ -394,6 +394,18 @@ extern Sensoren *sensors;
 extern data_t * unlockKeySensor(SensorGlucoseData *usedhist,scanstate *stateptr) ;
  //public static native long getdataptr(String sensorname);
 //int  nusensornr=0,maxsens=4;; SensorGlucoseData ** nusensors=new SensorGlucoseData *[maxsens];
+#ifdef DEBUG
+// Debug-only: fabricate a synthetic sensor with ~24h of readings (some low-quality)
+// so the graph renders without a real sensor. Wired to the "Produce data" menu button.
+extern "C" JNIEXPORT void JNICALL   fromjava(produceDebugData)(JNIEnv *env, jclass cl) {
+    if(!sensors) {
+      LOGAR("produceDebugData: sensors==null");
+      return;
+      }
+    const int ind=sensors->makeDebugSensor();
+    LOGGER("produceDebugData -> sensor index %d\n",ind);
+    }
+#endif
 extern "C" JNIEXPORT jlong JNICALL   fromjava(getsensorptr)(JNIEnv *env, jclass cl,jlong dataptr) {
     streamdata *sdata=reinterpret_cast<streamdata *>(dataptr);
     if(!sdata) {

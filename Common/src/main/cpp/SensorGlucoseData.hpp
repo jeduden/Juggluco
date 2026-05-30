@@ -1162,6 +1162,25 @@ static bool mkdatabase(string_view sensordir,time_t start,const  char *uid,const
     settings->data()->haslibre2=true;
     return true;
     }
+#ifdef DEBUG
+// Debug-only: create a synthetic Libre 2-style sensor database (interval=60, no
+// special type flags -> isLibre2()) so the "Produce data" debug button can
+// fabricate readings without a real sensor. See Sensoren::makeDebugSensor().
+static bool mkdatabaseDebug(string_view sensordir,time_t start) {
+    LOGGER("mkdatabaseDebug %s,%s",sensordir.data(),ctime(&start));
+    mkdir(sensordir.data(),0700);
+    pathconcat infoname(sensordir,infopdat);
+    constexpr uint16_t wear=14*24*60;
+    constexpr uint8_t days=wear/(60*24)+1;
+    Info inf{.starttime=(uint32_t)start,.lastscantime=(uint32_t)start,.starthistory=0,.endhistory=0,.scancount=0,.startid=0,.interval=60,.dupl=3,.days=days,.warmup=60,.wearduration=wear,.pollcount=0,.lockcount=0};
+    inf.ident.len=8;
+    inf.info.len=6;
+    inf.bluestart=(uint32_t)start;
+    writeall(infoname,&inf,sizeof(inf));
+    settings->data()->haslibre2=true;
+    return true;
+    }
+#endif
 /*
 E007-0M0063KNUJ0
 E07A-XX068ZMRF18              

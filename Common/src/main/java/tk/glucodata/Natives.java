@@ -57,6 +57,9 @@ static  {
 	}
 
 	public static  native int nfcdata(byte[] uid,byte[] info,byte[] dat);
+	// Debug-only: native impl is compiled only in DEBUG builds (see g.cpp). Guard
+	// calls with BuildConfig.DEBUG so release builds never hit UnsatisfiedLinkError.
+	public static native void produceDebugData();
 	//public stratic native boolean shouldenableStreaming(byte[] uid);
 //	public static native void enabledStreaming(byte[] uid,byte[] info,boolean val);
 	public static native void enabledStreaming(byte[] uid,byte[] info,int val,byte[] address); // address!=null enables, address==null don't ask again
