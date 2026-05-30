@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Build-type override: the .dub (releasedub) build coexists with the
+         production tk.glucodata install, so give it a distinct launcher name. -->
+    <string name="app_name">Juggluco Dev</string>
+</resources>
