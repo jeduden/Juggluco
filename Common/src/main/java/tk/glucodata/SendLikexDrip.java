@@ -39,6 +39,10 @@ public class SendLikexDrip   {
 private static final String EXTRA_SENSOR_STARTED_AT = "com.eveningoutpost.dexdrip.Extras.SensorStartedAt";
     private static final String EXTRA_TIMESTAMP = "com.eveningoutpost.dexdrip.Extras.Time";
    private static final String EXTRA_DATA_SOURCE_INFO = "com.eveningoutpost.dexdrip.Extras.SourceInfo";
+   private static final String EXTRA_NOISE = "com.eveningoutpost.dexdrip.Extras.Noise";
+   // xDrip noise levels: 1=CLEAN, 2=LIGHT, 3=MEDIUM, 4=HEAVY, 5=EXTREME.
+   // Map Juggluco quality: 0 (good) -> CLEAN, low-quality -> HEAVY so xDrip flags it.
+   private static final int NOISE_CLEAN=1, NOISE_LOWQUALITY=4;
 private static final String LOG_ID="SendLikexDrip";
 /*
 private static int getBatteryLevel() { 
@@ -69,7 +73,7 @@ private static String getSource(int sensorgen) {
             default -> "Libre2";
             };
         }
-private static Bundle mkGlucosebundle(double glucose,float rate,long timmsec,long sensorStartmsec,int sensorgen) {
+private static Bundle mkGlucosebundle(double glucose,float rate,long timmsec,long sensorStartmsec,int sensorgen,int quality) {
     Bundle extras = new Bundle();
     extras.putDouble(EXTRA_BG_ESTIMATE,glucose);
     extras.putString(EXTRA_BG_SLOPE_NAME,getxDripTrendName(rate));
@@ -78,6 +82,7 @@ private static Bundle mkGlucosebundle(double glucose,float rate,long timmsec,lon
     extras.putLong(EXTRA_TIMESTAMP,timmsec);
     extras.putLong(EXTRA_SENSOR_STARTED_AT,sensorStartmsec);
     extras.putString(EXTRA_DATA_SOURCE_INFO,getSource(sensorgen));
+    extras.putInt(EXTRA_NOISE, quality==0?NOISE_CLEAN:NOISE_LOWQUALITY);
 //        extras.putInt(EXTRA_SENSOR_BATTERY,100);
     return extras;
       }
@@ -86,14 +91,14 @@ private static String[] names=null;
 public static  void setreceivers() {
     names=Natives.xdripRecepters();
     }
-static void broadcastglucose(double glucose,float rate,long timmsec,long sensorStartmsec,int sensorgen) {
+static void broadcastglucose(double glucose,float rate,long timmsec,long sensorStartmsec,int sensorgen,int quality) {
     if(names==null)
         return;
     {
-    if(doLog) {Log.i(LOG_ID,"broadcastglucose "+glucose);};};
+    if(doLog) {Log.i(LOG_ID,"broadcastglucose "+glucose+" quality="+quality);};};
     final Context context=Applic.app;
     Intent intent = new Intent(ACTION);
-    intent.putExtras(mkGlucosebundle(glucose,rate,timmsec,sensorStartmsec,sensorgen));
+    intent.putExtras(mkGlucosebundle(glucose,rate,timmsec,sensorStartmsec,sensorgen,quality));
     intent.addFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES);
     for(var name:names) {
         if(name!=null) {

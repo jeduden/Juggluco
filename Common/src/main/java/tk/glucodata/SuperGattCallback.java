@@ -383,7 +383,7 @@ static private int low(long tim,notGlucose    sglucose,float gl,float rate,int a
                 //SendNSClient.broadcastglucose(mgdl, rate, timmsec);
                 }
             if(Natives.getxbroadcast())
-                SendLikexDrip.broadcastglucose(mgdl,rate,timmsec,sensorstartmsec,sensorgen);
+                SendLikexDrip.broadcastglucose(mgdl,rate,timmsec,sensorstartmsec,sensorgen,quality);
             if(!isWearable) {
                 if(doWearInt)
                     tk.glucodata.WearInt.sendglucose(mgdl, rate, alarm, timmsec);
