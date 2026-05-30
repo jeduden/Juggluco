@@ -262,6 +262,9 @@ static private int low(long tim,notGlucose    sglucose,float gl,float rate,int a
        return alarm;
       }
     static void dowithglucose(String SerialNumber, int mgdl, float gl, float rate, int alarm, long timmsec,long sensorstartmsec,long showtime,int sensorgen) {
+        dowithglucose(SerialNumber, mgdl, gl, rate, alarm, timmsec, sensorstartmsec, showtime, sensorgen, 0);
+        }
+    static void dowithglucose(String SerialNumber, int mgdl, float gl, float rate, int alarm, long timmsec,long sensorstartmsec,long showtime,int sensorgen, int quality) {
 
         if(gl==0.0)
             return;
@@ -367,7 +370,7 @@ static private int low(long tim,notGlucose    sglucose,float gl,float rate,int a
 
 
         if(Natives.getJugglucobroadcast())
-            JugglucoSend.broadcastglucose(SerialNumber,mgdl,gl,rate,alarm,timmsec);
+            JugglucoSend.broadcastglucose(SerialNumber,mgdl,gl,rate,alarm,timmsec,quality);
         if(!isWearable) {
             app.numdata.sendglucose(SerialNumber, tim, gl, thresholdchange(rate), alarm|0x10);
             GlucoseWidget.update();
@@ -419,14 +422,15 @@ protected void handleGlucoseResult(long res,long timmsec) {
         int glumgL = (int) (res & 0xFFFFFFFFL);
         if(glumgL != 0) {
             int alarm = (int) ((res >> 48) & 0xFFL);
-            if(doLog) {Log.i(LOG_ID, SerialNumber + " alarm=" + alarm);};;
+            int quality = (int) ((res >> 56) & 0xFFL); // bit 56 set by native for low-quality readings
+            if(doLog) {Log.i(LOG_ID, SerialNumber + " alarm=" + alarm + " quality=" + quality);};;
 
 
            final float gl = Applic.unit == 1 ? glumgL / (mgdLmult*10.0f) : glumgL/10.0f;
 
             short ratein = (short) ((res >> 32) & 0xFFFFL);
             float rate = ratein / 1000.0f;
-            dowithglucose(SerialNumber, (int)Math.round(glumgL/10.0f),gl,rate, alarm, timmsec,sensorstartmsec,showtime,sensorgen);
+            dowithglucose(SerialNumber, (int)Math.round(glumgL/10.0f),gl,rate, alarm, timmsec,sensorstartmsec,showtime,sensorgen,quality);
             charcha[0] = timmsec;
             if(!isWearable) {
                 if(Natives.gethealthConnect( )) {
