@@ -374,7 +374,10 @@ void   deletelast() {
           if(mg<45.0) mg=45.0; else if(mg>310.0) mg=310.0;
           const float change=(float)(mg-prevmg);
           prevmg=mg;
-          const int quality=((i%163)<3)?1:0; // scattered short low-quality clusters
+          // wide (~55 min) low-quality blocks, one every 4h (~6 over 24h), so the
+          // semi-transparent low-quality rendering is clearly visible on the curve.
+          const int phase240=i%240;
+          const int quality=(phase240>=40&&phase240<95)?1:0;
           sens->savepoll(t,i,(int)std::lround(mg),0,change,quality);
           }
       sens->getinfo()->lastscantime=now;
