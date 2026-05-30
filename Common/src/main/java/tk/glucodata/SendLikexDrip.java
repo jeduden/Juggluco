@@ -41,8 +41,10 @@ private static final String EXTRA_SENSOR_STARTED_AT = "com.eveningoutpost.dexdri
    private static final String EXTRA_DATA_SOURCE_INFO = "com.eveningoutpost.dexdrip.Extras.SourceInfo";
    private static final String EXTRA_NOISE = "com.eveningoutpost.dexdrip.Extras.Noise";
    // xDrip noise levels: 1=CLEAN, 2=LIGHT, 3=MEDIUM, 4=HEAVY, 5=EXTREME.
-   // Map Juggluco quality: 0 (good) -> CLEAN, low-quality -> HEAVY so xDrip flags it.
-   private static final int NOISE_CLEAN=1, NOISE_LOWQUALITY=4;
+   // Map Juggluco quality: 0 (good) -> CLEAN, low-quality -> LIGHT. LIGHT flags the
+   // reading as non-clean while staying low enough that xDrip still displays it
+   // (HEAVY/EXTREME can be smoothed away/hidden), so the low-quality value comes through.
+   private static final int NOISE_CLEAN=1, NOISE_LOWQUALITY=2;
 private static final String LOG_ID="SendLikexDrip";
 /*
 private static int getBatteryLevel() { 
