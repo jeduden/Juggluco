@@ -896,6 +896,8 @@ template <class TX,class TY> void JCurve::showlineScan(NVGcontext* avg,const Sca
     uint32_t late=0;
     float startx=-1000,starty=-1000;
     bool wasLowQuality=false;
+    int dashcount=0;
+    constexpr int dashon=2,dashperiod=4; // dashed rendering for low-quality stretches
     for(const ScanData *it=low;it!=high;it++) {
         if(it->valid()) {
             const uint32_t tim= it->t;
@@ -920,6 +922,7 @@ template <class TX,class TY> void JCurve::showlineScan(NVGcontext* avg,const Sca
                 nvgBeginPath(avg);
                 nvgMoveTo(avg, posx,posy);
                 startx=posx;starty=posy;
+                dashcount=0;
                 }
             else if(restart) {
                 nvgStrokeColor(avg, isLowQuality?lowqualcol:*col);
@@ -928,20 +931,26 @@ template <class TX,class TY> void JCurve::showlineScan(NVGcontext* avg,const Sca
                  nvgMoveTo(avg, posx,posy);
                  startx=posx,starty=posy;
                  restart=false;
+                 dashcount=0;
+                 }
+            else if(isLowQuality) {
+                 // Dashed thin line for low-quality stretches: de-emphasized, not thickened.
+                 // At ~1 reading/min a per-point dot would overlap into a thick band; dashes
+                 // keep it a thin dimmed line that reads as lower-confidence data.
+                 if((dashcount++%dashperiod)<dashon) {
+                     startx=starty=-1000.0f;
+                     nvgLineTo(avg, posx,posy);
+                     }
+                 else {
+                     nvgStroke(avg);
+                     nvgBeginPath(avg);
+                     nvgMoveTo(avg, posx,posy);
+                     startx=posx;starty=posy;
+                     }
                  }
             else {
                  startx=starty=-1000.0f;
                 nvgLineTo( avg,posx,posy);
-                }
-
-            if(isLowQuality) {
-                nvgStroke(avg);
-                nvgBeginPath(avg);
-                nvgCircle(avg, posx,posy,pointRadius*0.8f);
-                nvgFill(avg);
-                nvgBeginPath(avg);
-                nvgMoveTo(avg, posx,posy);
-                startx=starty=-1000.0f;
                 }
 
             wasLowQuality=isLowQuality;

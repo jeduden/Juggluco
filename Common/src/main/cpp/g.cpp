@@ -1089,7 +1089,12 @@ extern "C" JNIEXPORT jlong JNICALL   fromjava(processTooth)(JNIEnv *envin, jclas
             backup->wakebackup(wakestream);
             wakewithcurrent();
 
-            return lowquality?1LL:res;
+            // Low-quality readings ARE forwarded to external apps (GlucoDataHandler,
+            // xDrip, LibreLink, Wear, Gadgetbridge) for data continuity, but with the
+            // alarm bits (>>48) cleared so they never trigger Juggluco's own high/low
+            // alarms on unreliable data. LibreView/Abbott upload stays gated separately
+            // (goodCurrent in libreview.cpp/newlibre3.cpp).
+            return lowquality?(res & ~(0xFFLL<<48)):res;
             }
         }
     else
