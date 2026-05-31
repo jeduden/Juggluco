@@ -480,7 +480,7 @@ private	void oldonCharacteristicChanged(byte[] value) {
 						long res = processTooth(dataptr, newpacket);
 						// Classify each stream reading (unconditional): adb logcat -s JuggSensor
 						final String cls = res==1L?"skip/no-new-value"
-								: res==0L?"SENSOR-ERROR (algorithm decoded no glucose)"
+								: res==0L?"NO-GLUCOSE (warmup/gap or algorithm error - see native STREAM line)"
 								: ((res>>>56)&1L)!=0L?"LOW-QUALITY reading (sent, no alarm)"
 								: "good reading";
 						Log.e("JuggSensor", SerialNumber+" STREAM "+cls+" (res=0x"+Long.toHexString(res)+")");
