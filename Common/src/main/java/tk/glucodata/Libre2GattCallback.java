@@ -127,10 +127,11 @@ static void showCharacter(String label, BluetoothGattCharacteristic characterist
 			showCharacter(SerialNumber+" onDescriptorWrite status="+status, characteristic);
           }
       if(status!=GATT_SUCCESS ) {
+				Log.e("JuggSensor", SerialNumber+" STREAM-REFUSED: sensor rejected enabling notifications (onDescriptorWrite status="+status+") - disconnecting");
 				bluetoothGatt.disconnect();
             return;
          }
-         
+		Log.e("JuggSensor", SerialNumber+" stream notifications enabled (waiting for sensor data)");
 		if (sensorgen == 2 && conphase == 1) {
 			writeBLELogin();
 		}
@@ -177,6 +178,7 @@ private PendingIntent onalarm=null;
 				if(newState == BluetoothProfile.STATE_DISCONNECTED) {
 					if(status == 19) {
 						if(justenablednotification) {
+							Log.e("JuggSensor", SerialNumber+" STREAM-REFUSED: sensor terminated right after enabling notifications (status 19) - this install lacks valid streaming credentials for the sensor (NFC-scan the running sensor) or the sensor is bonded to another app");
 							Natives.resetbluetooth(dataptr);
 							justenablednotification = false;
 							}
@@ -314,6 +316,10 @@ private PendingIntent onalarm=null;
 		{if(doLog) {Log.i(LOG_ID, "BLE onServicesDiscovered invoked, status: " + status);};};
 //		readrssi=9999; mBluetoothGatt.readRemoteRssi();
 		if(status != GATT_SUCCESS||! m2831x()) {
+			Log.e("JuggSensor", SerialNumber+" SERVICES "+(status!=GATT_SUCCESS
+					? "discovery failed (status="+status+")"
+					: "streaming service/characteristic not found - sensor not streamable by this install (needs NFC scan/credentials?)")
+					+" - disconnecting");
 			mBluetoothGatt.disconnect();
 			}
 
@@ -339,6 +345,8 @@ private   boolean failedbefore=false;
 	@Override
 	public void onCharacteristicWrite(BluetoothGatt bluetoothGatt, BluetoothGattCharacteristic bluetoothGattCharacteristic, int status) {
 		{if(doLog) {Log.d(LOG_ID, bluetoothGatt.getDevice().getAddress() + " onCharacteristicWrite, status:" + status + " UUID:" + bluetoothGattCharacteristic.getUuid().toString());};};
+		if(status != GATT_SUCCESS)
+			Log.e("JuggSensor", SerialNumber+" AUTH-REJECTED: sensor rejected login/passcode write (onCharacteristicWrite status="+status+")");
 		if (sensorgen == 2)
 			return;
 		try {
