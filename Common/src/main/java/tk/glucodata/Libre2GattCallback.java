@@ -148,6 +148,19 @@ private PendingIntent onalarm=null;
 			}
 		long tim = System.currentTimeMillis();
 		try {
+			// Unconditional diagnostic (visible in any build via: adb logcat -s JuggSensor)
+			// to distinguish connection problems from data/quality problems.
+			{
+				final String st = newState==BluetoothProfile.STATE_CONNECTED?"CONNECTED"
+						: newState==BluetoothProfile.STATE_DISCONNECTED?"DISCONNECTED":("state"+newState);
+				final String why = status==0?"ok"
+						: status==8?"link supervision timeout (8)"
+						: status==19?"peer/sensor terminated (19)"
+						: status==22?"local host terminated (22)"
+						: status==133?"GATT_ERROR (133)"
+						: status==147?"connection failed/timeout (147)":("status "+status);
+				Log.e("JuggSensor", SerialNumber+" CONNECTION "+st+" ("+why+")");
+				}
 			if (doLog) {
 				final String[] state = {"DISCONNECTED", "CONNECTING", "CONNECTED", "DISCONNECTING"};
 				{if(doLog) {Log.i(LOG_ID, SerialNumber + " onConnectionStateChange, status:" + status + ", state: " + (newState < state.length ? state[newState] : newState));};};
@@ -457,6 +470,12 @@ private	void oldonCharacteristicChanged(byte[] value) {
 					final var newpacket= sensorgen==2?V2(773, tovalue, packet, null):packet;
 					if(newpacket!=null) {
 						long res = processTooth(dataptr, newpacket);
+						// Classify each stream reading (unconditional): adb logcat -s JuggSensor
+						final String cls = res==1L?"skip/no-new-value"
+								: res==0L?"SENSOR-ERROR (algorithm decoded no glucose)"
+								: ((res>>>56)&1L)!=0L?"LOW-QUALITY reading (sent, no alarm)"
+								: "good reading";
+						Log.e("JuggSensor", SerialNumber+" STREAM "+cls+" (res=0x"+Long.toHexString(res)+")");
 						if(res!=1L) {
 							handleGlucoseResult(res,timmsec);
 							}

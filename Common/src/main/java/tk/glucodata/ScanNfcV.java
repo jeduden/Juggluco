@@ -281,6 +281,25 @@ static public synchronized void scan(GlucoseCurve curve,Tag tag) {
                         value = uit & 0xFFFF;
                         Log.format("glucose=%.1f\n",(float)value/mgdLmult);
                         ret = uit >> 16;
+                        // Unconditional scan-result diagnostic: adb logcat -s JuggSensor
+                        {
+                            final int rc = ret & 0xFF;
+                            final String name = switch(rc) {
+                                case 0 -> value!=0 ? "OK (glucose "+((float)value/mgdLmult)+")" : "OK (no glucose)";
+                                case 3 -> "needs activation";
+                                case 4 -> "sensor ended";
+                                case 5 -> "new / warming-up sensor";
+                                case 7 -> "sensor in warmup";
+                                case 8, 9, 0x85, 0x87 -> "streaming setup";
+                                case 10 -> "SENSOR-ERROR: Abbott algorithm init failed (native lib missing/not loaded?)";
+                                case 11 -> "SENSOR-ERROR: Abbott could not process sensor (decrypt/parse failed - wrong sensor/key/lib?)";
+                                case 12 -> "SENSOR-ERROR: scan timed out";
+                                case 18 -> "SENSOR-ERROR: read tag data error";
+                                case 19 -> "SENSOR-ERROR: exception during scan";
+                                default -> "code "+rc;
+                                };
+                            Log.e("JuggSensor", "NFC scan: ret=0x"+Integer.toHexString(ret)+" value="+value+" -> "+name);
+                        }
                         if(newdevice!=null&& Arrays.equals(newdevice,uid)&& Applic.app.canusebluetooth() ) {
                             if(value!=0|| (ret&0xFF)==5||(ret&0xFF)==7) {
                                 if(SensorBluetooth.resetDevice(Natives.getserial(uid,info)))
