@@ -488,6 +488,9 @@ private	void oldonCharacteristicChanged(byte[] value) {
 							handleGlucoseResult(res,timmsec);
 							}
 						}
+						else {
+							Log.e("JuggSensor", SerialNumber+" BAD-DATA: stream packet failed decryption/validation (V2 returned null) - corrupt or undecryptable data from sensor");
+							}
                     datatime=timmsec;
 					if(wakeLock!=null)
 						wakeLock.release();
@@ -501,6 +504,7 @@ private	void oldonCharacteristicChanged(byte[] value) {
 			;
 			break;
 			default: {
+				Log.e("JuggSensor", SerialNumber+" BAD-DATA: unexpected stream packet length="+value.length+" (malformed/out-of-sequence sensor data)");
 				{if(doLog) {Log.i(LOG_ID, SerialNumber + " onCharacteristicChanged: wrong length=" + value.length);};};
 			}
 			;
