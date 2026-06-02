@@ -654,6 +654,7 @@ public static    int stopprogram=0;
     public void onCreate() {
         super.onCreate();
 
+    SensorFileLog.start(this); // diagnostic .dub/debug builds: persist JuggSensor logs to a pullable file
     supportsRtl = (getContext().getApplicationInfo().flags & ApplicationInfo.FLAG_SUPPORTS_RTL) != 0;
     if(DiskSpace.check(this)) {
         initproc();
