@@ -89,11 +89,20 @@ public final class SensorFileLog {
                                     try { w.close(); } catch (Throwable ignored) {}
                                     w = nw;
                                     written = 0;
+                                } else if (logfile.length() > 2 * ROTATE_BYTES) {
+                                    // rename keeps failing and the file is over the hard cap: truncate
+                                    // in place (reopen non-append) to bound disk usage. Bounds the
+                                    // single file at ~2*ROTATE_BYTES even if rename never succeeds.
+                                    android.util.Log.e(LOG_ID, "rotate rename failing; truncating to bound size");
+                                    final Writer nw = new BufferedWriter(new FileWriter(logfile, false));
+                                    try { w.close(); } catch (Throwable ignored) {}
+                                    w = nw;
+                                    written = 0;
                                 } else {
-                                    // rename failed: keep appending rather than truncate/lose data.
-                                    // Reset the counter to 0 (not length()) so we don't re-attempt
-                                    // rotation on every subsequent line (which would busy-spam); we
-                                    // simply wait another ROTATE_BYTES before trying again.
+                                    // rename failed but under the hard cap: keep appending rather than
+                                    // lose data. Reset the counter to 0 (not length()) so we don't
+                                    // re-attempt rotation on every subsequent line (busy-spam); wait
+                                    // another ROTATE_BYTES before retrying.
                                     android.util.Log.e(LOG_ID, "rotate rename failed; will retry after more output");
                                     written = 0;
                                 }
