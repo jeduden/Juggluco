@@ -298,7 +298,7 @@ static public synchronized void scan(GlucoseCurve curve,Tag tag) {
                                 case 19 -> "SENSOR-ERROR: exception during scan";
                                 default -> "code "+rc;
                                 };
-                            Log.e("JuggSensor", "NFC scan: ret=0x"+Integer.toHexString(ret)+" value="+value+" -> "+name);
+                            android.util.Log.e("JuggSensor", "NFC scan: ret=0x"+Integer.toHexString(ret)+" value="+value+" -> "+name);
                         }
                         if(newdevice!=null&& Arrays.equals(newdevice,uid)&& Applic.app.canusebluetooth() ) {
                             if(value!=0|| (ret&0xFF)==5||(ret&0xFF)==7) {

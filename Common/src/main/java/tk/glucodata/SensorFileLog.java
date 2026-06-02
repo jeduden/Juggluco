@@ -8,6 +8,7 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.InputStreamReader;
 import java.io.Writer;
+import java.nio.charset.StandardCharsets;
 
 /**
  * Diagnostic-only persistent capture of the unconditional "JuggSensor" logcat
@@ -50,35 +51,51 @@ public final class SensorFileLog {
         final File oldfile = new File(dir, "sensorlog.1.txt");
         while (true) {
             Process p = null;
+            // -T 1 starts near "now" so we don't re-dump the whole buffer on each (re)start.
             try {
-                // -T 1 starts near "now" so we don't re-dump the whole buffer on each (re)start.
                 p = Runtime.getRuntime().exec(new String[]{
                         "logcat", "-v", "time", "-T", "1", "JuggSensor:V", "*:S"});
-                final BufferedReader r = new BufferedReader(new InputStreamReader(p.getInputStream()));
-                Writer w = new BufferedWriter(new FileWriter(logfile, true));
-                long written = logfile.length();
-                String line;
-                while ((line = r.readLine()) != null) {
-                    if (line.startsWith("---")) continue; // skip "--- beginning of ..." banners
-                    w.write(line);
-                    w.write('\n');
-                    w.flush();
-                    written += line.length() + 1;
-                    if (written > ROTATE_BYTES) {
-                        w.close();
-                        if (oldfile.exists()) oldfile.delete();
-                        logfile.renameTo(oldfile);
-                        w = new BufferedWriter(new FileWriter(logfile, false));
-                        written = 0;
-                    }
-                }
-                w.close();
             } catch (Throwable e) {
-                android.util.Log.e(LOG_ID, "capture loop error: " + e);
-            } finally {
-                if (p != null) p.destroy();
+                android.util.Log.e(LOG_ID, "exec logcat failed: " + e);
             }
-            // logcat process exited (rare); wait and restart the capture.
+            if (p != null) {
+                // try-with-resources closes the reader; the writer is closed in the inner finally
+                // (it may be reassigned on rotation, so it can't be a try-with-resources resource).
+                try (BufferedReader r = new BufferedReader(new InputStreamReader(p.getInputStream()))) {
+                    Writer w = new BufferedWriter(new FileWriter(logfile, true));
+                    try {
+                        long written = logfile.length();
+                        String line;
+                        while ((line = r.readLine()) != null) {
+                            if (line.startsWith("---")) continue; // skip "--- beginning of ..." banners
+                            w.write(line);
+                            w.write('\n');
+                            w.flush();
+                            written += line.getBytes(StandardCharsets.UTF_8).length + 1; // bytes, for accurate cap
+                            if (written > ROTATE_BYTES) {
+                                if (oldfile.exists()) oldfile.delete();
+                                if (logfile.renameTo(oldfile)) {
+                                    final Writer nw = new BufferedWriter(new FileWriter(logfile, false));
+                                    try { w.close(); } catch (Throwable ignored) {}
+                                    w = nw;
+                                    written = 0;
+                                } else {
+                                    // rename failed: keep appending rather than truncate/lose data
+                                    android.util.Log.e(LOG_ID, "rotate rename failed; continuing to append");
+                                    written = logfile.length();
+                                }
+                            }
+                        }
+                    } finally {
+                        try { w.close(); } catch (Throwable ignored) {}
+                    }
+                } catch (Throwable e) {
+                    android.util.Log.e(LOG_ID, "capture loop error: " + e);
+                } finally {
+                    p.destroy();
+                }
+            }
+            // logcat exited / could not start; wait and retry.
             try {
                 Thread.sleep(5000);
             } catch (InterruptedException ie) {

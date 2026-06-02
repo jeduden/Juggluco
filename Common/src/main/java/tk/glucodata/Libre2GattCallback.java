@@ -127,11 +127,11 @@ static void showCharacter(String label, BluetoothGattCharacteristic characterist
 			showCharacter(SerialNumber+" onDescriptorWrite status="+status, characteristic);
           }
       if(status!=GATT_SUCCESS ) {
-				Log.e("JuggSensor", SerialNumber+" STREAM-REFUSED: sensor rejected enabling notifications (onDescriptorWrite status="+status+") - disconnecting");
+				android.util.Log.e("JuggSensor", SerialNumber+" STREAM-REFUSED: sensor rejected enabling notifications (onDescriptorWrite status="+status+") - disconnecting");
 				bluetoothGatt.disconnect();
             return;
          }
-		Log.e("JuggSensor", SerialNumber+" stream notifications enabled (waiting for sensor data)");
+		android.util.Log.e("JuggSensor", SerialNumber+" stream notifications enabled (waiting for sensor data)");
 		if (sensorgen == 2 && conphase == 1) {
 			writeBLELogin();
 		}
@@ -160,7 +160,7 @@ private PendingIntent onalarm=null;
 						: status==22?"local host terminated (22)"
 						: status==133?"GATT_ERROR (133)"
 						: status==147?"connection failed/timeout (147)":("status "+status);
-				Log.e("JuggSensor", SerialNumber+" CONNECTION "+st+" ("+why+")");
+				android.util.Log.e("JuggSensor", SerialNumber+" CONNECTION "+st+" ("+why+")");
 				}
 			if (doLog) {
 				final String[] state = {"DISCONNECTED", "CONNECTING", "CONNECTED", "DISCONNECTING"};
@@ -178,7 +178,7 @@ private PendingIntent onalarm=null;
 				if(newState == BluetoothProfile.STATE_DISCONNECTED) {
 					if(status == 19) {
 						if(justenablednotification) {
-							Log.e("JuggSensor", SerialNumber+" STREAM-REFUSED: sensor terminated right after enabling notifications (status 19) - this install lacks valid streaming credentials for the sensor (NFC-scan the running sensor) or the sensor is bonded to another app");
+							android.util.Log.e("JuggSensor", SerialNumber+" STREAM-REFUSED: sensor terminated right after enabling notifications (status 19) - this install lacks valid streaming credentials for the sensor (NFC-scan the running sensor) or the sensor is bonded to another app");
 							Natives.resetbluetooth(dataptr);
 							justenablednotification = false;
 							}
@@ -316,7 +316,7 @@ private PendingIntent onalarm=null;
 		{if(doLog) {Log.i(LOG_ID, "BLE onServicesDiscovered invoked, status: " + status);};};
 //		readrssi=9999; mBluetoothGatt.readRemoteRssi();
 		if(status != GATT_SUCCESS||! m2831x()) {
-			Log.e("JuggSensor", SerialNumber+" SERVICES "+(status!=GATT_SUCCESS
+			android.util.Log.e("JuggSensor", SerialNumber+" SERVICES "+(status!=GATT_SUCCESS
 					? "discovery failed (status="+status+")"
 					: "streaming service/characteristic not found - sensor not streamable by this install (needs NFC scan/credentials?)")
 					+" - disconnecting");
@@ -346,7 +346,7 @@ private   boolean failedbefore=false;
 	public void onCharacteristicWrite(BluetoothGatt bluetoothGatt, BluetoothGattCharacteristic bluetoothGattCharacteristic, int status) {
 		{if(doLog) {Log.d(LOG_ID, bluetoothGatt.getDevice().getAddress() + " onCharacteristicWrite, status:" + status + " UUID:" + bluetoothGattCharacteristic.getUuid().toString());};};
 		if(status != GATT_SUCCESS)
-			Log.e("JuggSensor", SerialNumber+" AUTH-REJECTED: sensor rejected login/passcode write (onCharacteristicWrite status="+status+")");
+			android.util.Log.e("JuggSensor", SerialNumber+" AUTH-REJECTED: sensor rejected login/passcode write (onCharacteristicWrite status="+status+")");
 		if (sensorgen == 2)
 			return;
 		try {
@@ -483,13 +483,13 @@ private	void oldonCharacteristicChanged(byte[] value) {
 								: res==0L?"NO-GLUCOSE (warmup/gap or algorithm error - see native STREAM line)"
 								: ((res>>>56)&1L)!=0L?"LOW-QUALITY reading (sent, no alarm)"
 								: "good reading";
-						Log.e("JuggSensor", SerialNumber+" STREAM "+cls+" (res=0x"+Long.toHexString(res)+")");
+						android.util.Log.e("JuggSensor", SerialNumber+" STREAM "+cls+" (res=0x"+Long.toHexString(res)+")");
 						if(res!=1L) {
 							handleGlucoseResult(res,timmsec);
 							}
 						}
 						else {
-							Log.e("JuggSensor", SerialNumber+" BAD-DATA: stream packet failed decryption/validation (V2 returned null) - corrupt or undecryptable data from sensor");
+							android.util.Log.e("JuggSensor", SerialNumber+" BAD-DATA: stream packet failed decryption/validation (V2 returned null) - corrupt or undecryptable data from sensor");
 							}
                     datatime=timmsec;
 					if(wakeLock!=null)
@@ -504,7 +504,7 @@ private	void oldonCharacteristicChanged(byte[] value) {
 			;
 			break;
 			default: {
-				Log.e("JuggSensor", SerialNumber+" BAD-DATA: unexpected stream packet length="+value.length+" (malformed/out-of-sequence sensor data)");
+				android.util.Log.e("JuggSensor", SerialNumber+" BAD-DATA: unexpected stream packet length="+value.length+" (malformed/out-of-sequence sensor data)");
 				{if(doLog) {Log.i(LOG_ID, SerialNumber + " onCharacteristicChanged: wrong length=" + value.length);};};
 			}
 			;
