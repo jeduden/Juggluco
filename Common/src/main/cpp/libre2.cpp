@@ -1399,8 +1399,10 @@ if(alg) {
                 }
             }
         else {
-            // Algorithm ran OK but produced no glucose for this reading - NOT an error.
-            JSENSORLOG("STREAM no-value: algorithm produced no glucose this reading id=%d (warmup/gap/waiting, not a sensor error)", gid);
+            // Algorithm ran but produced no glucose value (value==0) for this reading.
+            // Returns nullptr, so g.cpp processTooth marks hist->sensorerror=true. Causes:
+            // warm-up/gap, or the algorithm rejecting an out-of-range/noisy reading.
+            JSENSORLOG("STREAM no-value: algorithm produced no glucose this reading id=%d (value==0; warmup/gap or algorithm rejected reading; marks sensorerror)", gid);
             delete alg;
             LOGSTRING("zero glucose value\n");
             }

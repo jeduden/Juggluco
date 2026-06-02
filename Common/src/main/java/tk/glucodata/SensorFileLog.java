@@ -34,16 +34,26 @@ public final class SensorFileLog {
     public static synchronized void start(Context ctx) {
         if (started) return;
         if (!(ctx.getPackageName().endsWith(".dub") || BuildConfig.DEBUG)) return; // diagnostic builds only
-        final File dir = ctx.getExternalFilesDir(null);
-        if (dir == null) {
-            android.util.Log.e(LOG_ID, "no external files dir; sensor file logging disabled");
-            return;
-        }
-        started = true;
-        final Thread t = new Thread(() -> run(dir), "SensorFileLog");
+        // Resolve the external dir on the background thread (getExternalFilesDir can do disk I/O;
+        // keep it off the main thread in Application.onCreate). started is set only after a
+        // successful Thread.start() so a start failure (e.g. OOM) doesn't permanently disable it.
+        final Context app = ctx.getApplicationContext();
+        final Thread t = new Thread(() -> {
+            final File dir = app.getExternalFilesDir(null);
+            if (dir == null) {
+                android.util.Log.e(LOG_ID, "no external files dir; sensor file logging disabled");
+                return;
+            }
+            android.util.Log.e("JuggSensor", "SensorFileLog: capturing to " + new File(dir, "sensorlog.txt"));
+            run(dir);
+        }, "SensorFileLog");
         t.setDaemon(true);
-        t.start();
-        android.util.Log.e("JuggSensor", "SensorFileLog: capturing to " + new File(dir, "sensorlog.txt"));
+        try {
+            t.start();
+            started = true;
+        } catch (Throwable e) {
+            android.util.Log.e(LOG_ID, "failed to start capture thread: " + e);
+        }
     }
 
     private static void run(File dir) {
@@ -80,9 +90,12 @@ public final class SensorFileLog {
                                     w = nw;
                                     written = 0;
                                 } else {
-                                    // rename failed: keep appending rather than truncate/lose data
-                                    android.util.Log.e(LOG_ID, "rotate rename failed; continuing to append");
-                                    written = logfile.length();
+                                    // rename failed: keep appending rather than truncate/lose data.
+                                    // Reset the counter to 0 (not length()) so we don't re-attempt
+                                    // rotation on every subsequent line (which would busy-spam); we
+                                    // simply wait another ROTATE_BYTES before trying again.
+                                    android.util.Log.e(LOG_ID, "rotate rename failed; will retry after more output");
+                                    written = 0;
                                 }
                             }
                         }

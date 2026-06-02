@@ -346,7 +346,7 @@ private   boolean failedbefore=false;
 	public void onCharacteristicWrite(BluetoothGatt bluetoothGatt, BluetoothGattCharacteristic bluetoothGattCharacteristic, int status) {
 		{if(doLog) {Log.d(LOG_ID, bluetoothGatt.getDevice().getAddress() + " onCharacteristicWrite, status:" + status + " UUID:" + bluetoothGattCharacteristic.getUuid().toString());};};
 		if(status != GATT_SUCCESS)
-			android.util.Log.e("JuggSensor", SerialNumber+" AUTH-REJECTED: sensor rejected login/passcode write (onCharacteristicWrite status="+status+")");
+			android.util.Log.e("JuggSensor", SerialNumber+" WRITE-FAILED: sensor rejected a characteristic write during streaming setup (status="+status+", uuid="+bluetoothGattCharacteristic.getUuid()+") - often the login/passcode");
 		if (sensorgen == 2)
 			return;
 		try {
