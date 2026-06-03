@@ -477,6 +477,7 @@ private	void oldonCharacteristicChanged(byte[] value) {
 					System.arraycopy(value, 0, packet, 38, 8);
 					final var newpacket= sensorgen==2?V2(773, tovalue, packet, null):packet;
 					if(newpacket!=null) {
+						android.util.Log.e("JuggSensor", SerialNumber+" PACKET("+newpacket.length+") "+new String(showhex.hexstr(newpacket,0,newpacket.length)));
 						long res = processTooth(dataptr, newpacket);
 						// Classify each stream reading (unconditional): adb logcat -s JuggSensor
 						final String cls = res==1L?"skip/no-new-value"
