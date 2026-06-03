@@ -23,6 +23,9 @@
 #include "jnihistory.h"
 #include "nfcdata.hpp"
 #include "datbackup.hpp"
+#include <android/log.h>
+// Diagnostic: log raw history values (only populated from an NFC scan's FRAM data).
+#define JSENSORLOG(...) __android_log_print(ANDROID_LOG_WARN,"JuggSensor",__VA_ARGS__)
 extern bool saveSputnik_PG2(const jniHistory &hist,time_t nutime,int nuid,const nfcdata  *nfcptr, SensorGlucoseData &save) ;
 bool saveSputnik_PG2(const jniHistory &hist,time_t nutime,int nuid,const nfcdata  *nfcptr, SensorGlucoseData &save) { 
      jint len=hist.size();
@@ -66,6 +69,8 @@ bool saveSputnik_PG2(const jniHistory &hist,time_t nutime,int nuid,const nfcdata
             }
         *item={.time=was,.id=id};
         item->glu[0]=rawel;item->glu[1]=gv;
+        if(rawel) // raw present (from an NFC scan's FRAM history) - the value the stream may have rejected
+            JSENSORLOG("HISTORY raw: id=%d raw=%d calibrated=%d (mg/L)", id, rawel, gv);
         if(firstchanged<0)
             firstchanged=topos;
 #ifndef NOLOG

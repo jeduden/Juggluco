@@ -2057,7 +2057,27 @@ displaytime disp=getdisplaytime(nu,starttime2,endtime, transx);
         for(int i=histlen-1;i>=0;i--) {
             int index= hists[i];
             int colorindex=segcolor(index,2);
-             histcurve(avg,sensors->getSensorData(index), histpositions[i].first, histpositions[i].second,transx,transy,colorindex); 
+             histcurve(avg,sensors->getSensorData(index), histpositions[i].first, histpositions[i].second,transx,transy,colorindex);
+             // Diagnostic: overlay the RAW history value (Glucose::getraw(), glu[0]) as distinct
+             // teal DOTS (no connecting line), so raw is visibly separate from the calibrated curve.
+             {
+                const auto *his=sensors->getSensorData(index);
+                if(!(his->isDexcom()&&!settings->data()->dexcomPredict)) {
+                    nvgFillColor(avg, nvgRGBA(0,170,210,255)); // teal = raw
+                    for(auto pos=histpositions[i].first,last=histpositions[i].second;pos<=last;pos++) {
+                        const Glucose *hg=his->getglucose(pos);
+                        if(hg->valid()) {
+                            const uint32_t raw=hg->getraw();
+                            if(raw) {
+                                const float posx=transx(hg->gettime()),posy=transy(raw);
+                                nvgBeginPath(avg);
+                                nvgCircle(avg, posx,posy,pointRadius*0.85f);
+                                nvgFill(avg);
+                                }
+                            }
+                        }
+                    }
+                }
              }
         }
 
