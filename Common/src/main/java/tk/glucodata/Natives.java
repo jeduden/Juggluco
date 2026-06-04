@@ -60,6 +60,11 @@ static  {
 	// Debug-only: native impl is compiled only in DEBUG builds (see g.cpp). Guard
 	// calls with BuildConfig.DEBUG so release builds never hit UnsatisfiedLinkError.
 	public static native void produceDebugData();
+	// Diagnostic: store per-minute RAW values recovered from the Libre 2 BLE stream
+	// (ported decryption, see Libre2Raw) for the teal raw-dot overlay in the curve.
+	// nowsec = wall-clock epoch seconds of this packet; curage = current sensor minute;
+	// ids[i]/raws[i] = the sensor minute and its 14-bit raw value.
+	public static native void storeStreamRaw(long nowsec, int curage, int[] ids, int[] raws);
 	//public stratic native boolean shouldenableStreaming(byte[] uid);
 //	public static native void enabledStreaming(byte[] uid,byte[] info,boolean val);
 	public static native void enabledStreaming(byte[] uid,byte[] info,int val,byte[] address); // address!=null enables, address==null don't ask again

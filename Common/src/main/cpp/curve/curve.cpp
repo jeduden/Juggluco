@@ -66,6 +66,7 @@ using namespace std::literals;
 #include "settings/settings.hpp"
 
 #include "SensorGlucoseData.hpp"
+#include "perminraw.hpp"
 #include "sensoren.hpp"
 #include "nums/numdata.hpp"
 #include "nfcdata.hpp"
@@ -2080,6 +2081,35 @@ displaytime disp=getdisplaytime(nu,starttime2,endtime, transx);
                 }
              }
         }
+
+    // Diagnostic: per-minute RAW recovered from the Libre 2 BLE stream (ported
+    // decryption, stored via Natives.storeStreamRaw). Same teal color as the 15-min
+    // FRAM raw dots above, but populated on every 2-min packet so recent minutes fill
+    // in densely. Gated like the FRAM raw dots (showhistories).
+    if(showhistories) {
+        const uint32_t from=static_cast<uint32_t>(starttime2), to=static_cast<uint32_t>(endtime);
+        // Snapshot only the in-window points under the lock - entries are id-ordered
+        // (hence time-ordered within a sensor), so stop once past the window - then draw
+        // lock-free so the BLE writer thread is never blocked across NanoVG calls.
+        static thread_local std::vector<PerminRawPt> snap;
+        snap.clear();
+        {
+            std::lock_guard<std::mutex> lk(g_perminRawMutex);
+            for(const auto &kv:g_perminRaw) {
+                const PerminRawPt &pt=kv.second;
+                if(pt.time>to) break;
+                if(pt.time>=from) snap.push_back(pt);
+                }
+        }
+        if(!snap.empty()) {
+            nvgFillColor(avg, nvgRGBA(0,170,210,255)); // teal = raw
+            for(const PerminRawPt &pt:snap) {
+                nvgBeginPath(avg);
+                nvgCircle(avg, transx(pt.time),transy(pt.raw),pointRadius*0.55f);
+                nvgFill(avg);
+                }
+            }
+    }
 
     if(showcalibratedhistories) {
         nvgStrokeWidth(avg, historyStrokeWidth);

@@ -55,6 +55,7 @@ sighandler_t bsd_signal(int signum, sighandler_t handler);
 #include "fromjava.h"
 
 #include "settings/settings.hpp"
+#include "perminraw.hpp"
 #include "datbackup.hpp"
 #include "error_codes.h"
 #ifdef DYNLINK
@@ -406,6 +407,29 @@ extern "C" JNIEXPORT void JNICALL   fromjava(produceDebugData)(JNIEnv *env, jcla
     LOGGER("produceDebugData -> sensor index %d\n",ind);
     }
 #endif
+// Diagnostic: store per-minute RAW values recovered from the Libre 2 BLE stream
+// (Java Libre2Raw decryption) into the in-memory overlay store. Always compiled
+// (the streaming diagnostic build is not a DEBUG build).
+extern "C" JNIEXPORT void JNICALL   fromjava(storeStreamRaw)(JNIEnv *env, jclass cl,jlong nowsec,jint curage,jintArray jids,jintArray jraws) {
+    if(!jids||!jraws)
+        return;
+    const jsize n=env->GetArrayLength(jids);
+    if(n<=0||env->GetArrayLength(jraws)<n)
+        return;
+    jint *ids=env->GetIntArrayElements(jids,nullptr);
+    jint *raws=env->GetIntArrayElements(jraws,nullptr);
+    if(ids&&raws) {
+        for(jsize i=0;i<n;i++) {
+            const int id=ids[i];
+            // time of this minute = now - (current minute - this minute)*60s.
+            // storePerminRaw drops id<0 / raw==0; no need to pre-filter here.
+            const uint32_t t=static_cast<uint32_t>(nowsec-(int64_t)(curage-id)*60);
+            storePerminRaw(id,t,static_cast<uint16_t>(raws[i]));
+            }
+        }
+    if(ids)  env->ReleaseIntArrayElements(jids,ids,JNI_ABORT);
+    if(raws) env->ReleaseIntArrayElements(jraws,raws,JNI_ABORT);
+    }
 extern "C" JNIEXPORT jlong JNICALL   fromjava(getsensorptr)(JNIEnv *env, jclass cl,jlong dataptr) {
     streamdata *sdata=reinterpret_cast<streamdata *>(dataptr);
     if(!sdata) {

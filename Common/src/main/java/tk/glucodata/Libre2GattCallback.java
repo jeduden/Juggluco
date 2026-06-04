@@ -78,6 +78,41 @@ public class Libre2GattCallback extends SuperGattCallback {
 	boolean pack1 = false, pack2 = false;
 	final byte[] packet = new byte[46];
 
+	// Diagnostic per-minute raw (Libre2Raw): the 6 cipher UID bytes id[0..5], resolved once.
+	// Primary source is the native 8-byte sensor ident (same bytes getserial consumes);
+	// uidFromSerial is only a fallback if the native ident isn't available.
+	private int[] rawuid = null;
+	private boolean rawuidTried = false;
+
+	/** Decrypt the just-assembled BLE packet and store its per-minute raw for the curve overlay. */
+	private void storeStreamRaw(long timmsec) {
+		try {
+			if(!rawuidTried) {
+				rawuidTried = true;
+				final byte[] ident = Natives.getsensorident(dataptr); // 8-byte UID; cipher uses [0..5]
+				if(ident != null && ident.length >= 6) {
+					rawuid = new int[6];
+					for(int i=0;i<6;i++) rawuid[i] = ident[i] & 0xFF;
+					}
+				else
+					rawuid = Libre2Raw.uidFromSerial(SerialNumber); // fallback
+				if(rawuid == null)
+					android.util.Log.e("JuggSensor", SerialNumber+" RAW per-min: no UID (ident="
+							+(ident==null?"null":ident.length+"B")+") - overlay disabled");
+				}
+			if(rawuid == null) return;
+			final Libre2Raw.Result r = Libre2Raw.extract(rawuid, packet);
+			if(r == null || !r.crcValid) {
+				android.util.Log.e("JuggSensor", SerialNumber+" RAW per-min: CRC invalid (decryption mismatch)");
+				return;
+				}
+			Natives.storeStreamRaw(timmsec/1000L, r.age, r.trendId, r.trendRaw);
+			android.util.Log.e("JuggSensor", SerialNumber+" RAW per-min age="+r.age+" cur="+r.trendRaw[0]);
+		} catch(Throwable e) {
+			android.util.Log.e("JuggSensor", SerialNumber+" RAW per-min error: "+e);
+		}
+	}
+
 
 	@SuppressLint("MissingPermission")
 	final void writeBLELogin() {
@@ -475,6 +510,11 @@ private	void oldonCharacteristicChanged(byte[] value) {
 					pack1 = false;
 					pack2 = false;
 					System.arraycopy(value, 0, packet, 38, 8);
+					// Diagnostic: recover the per-minute RAW signal from the BLE packet by
+					// decrypting it (ported open-source Libre 2 algorithm, see Libre2Raw) and
+					// store it for the teal raw-dot overlay. Juggluco's V2()/P2 path below only
+					// yields the calibrated value; this is the only source of per-minute raw.
+					storeStreamRaw(timmsec);
 					final var newpacket= sensorgen==2?V2(773, tovalue, packet, null):packet;
 					if(newpacket!=null) {
 						android.util.Log.e("JuggSensor", SerialNumber+" PACKET("+newpacket.length+") "+new String(showhex.hexstr(newpacket,0,newpacket.length)));
