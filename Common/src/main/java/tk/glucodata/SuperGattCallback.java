@@ -180,6 +180,12 @@ static long lastfound() {
 
 static final int mininterval=55;
 static long nexttime=0L; //secs
+// xDrip/AAPS broadcast is throttled separately to ~5 min: every-minute delivery
+// makes AAPS run its loop and upload to Nightscout every minute, which keeps the
+// network radio warm and drains the battery. 285s (<300) so a per-minute reading
+// still clears the gate at the 5-minute mark rather than slipping to 6 minutes.
+static final int xmininterval=285;
+static long xnexttime=0L; //secs
 public static tk.glucodata.GlucoseAlarms glucosealarms=null;
 static notGlucose previousglucose=null;
 static float previousglucosevalue=0.0f;
@@ -382,15 +388,18 @@ static private int low(long tim,notGlucose    sglucose,float gl,float rate,int a
                 if(Natives.geteverSensebroadcast()) EverSense.broadcastglucose(mgdl, rate, timmsec);
                 //SendNSClient.broadcastglucose(mgdl, rate, timmsec);
                 }
-            if(Natives.getxbroadcast())
-                SendLikexDrip.broadcastglucose(mgdl,rate,timmsec,sensorstartmsec,sensorgen,quality);
             if(!isWearable) {
                 if(doWearInt)
                     tk.glucodata.WearInt.sendglucose(mgdl, rate, alarm, timmsec);
 
                 if(doGadgetbridge)
                     Gadgetbridge.sendglucose(sglucose.value,mgdl,gl,rate,timmsec);
-                } 
+                }
+            }
+        if(tim>xnexttime) {
+            xnexttime=tim+xmininterval;
+            if(Natives.getxbroadcast())
+                SendLikexDrip.broadcastglucose(mgdl,rate,timmsec,sensorstartmsec,sensorgen,quality);
             }
 
     }
