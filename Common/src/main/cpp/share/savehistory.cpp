@@ -23,6 +23,9 @@
 #include "jnihistory.h"
 #include "nfcdata.hpp"
 #include "datbackup.hpp"
+#include <android/log.h>
+// Diagnostic: log raw history values (only populated from an NFC scan's FRAM data).
+#define JSENSORLOG(...) __android_log_print(ANDROID_LOG_WARN,"JuggSensor",__VA_ARGS__)
 extern bool saveSputnik_PG2(const jniHistory &hist,time_t nutime,int nuid,const nfcdata  *nfcptr, SensorGlucoseData &save) ;
 bool saveSputnik_PG2(const jniHistory &hist,time_t nutime,int nuid,const nfcdata  *nfcptr, SensorGlucoseData &save) { 
      jint len=hist.size();
@@ -66,6 +69,8 @@ bool saveSputnik_PG2(const jniHistory &hist,time_t nutime,int nuid,const nfcdata
             }
         *item={.time=was,.id=id};
         item->glu[0]=rawel;item->glu[1]=gv;
+        if(rawel) // raw present (from an NFC scan's FRAM history) - the value the stream may have rejected
+            JSENSORLOG("HISTORY raw: id=%d raw=%d calibrated=%d (mg/L)", id, rawel, gv);
         if(firstchanged<0)
             firstchanged=topos;
 #ifndef NOLOG
@@ -74,8 +79,18 @@ bool saveSputnik_PG2(const jniHistory &hist,time_t nutime,int nuid,const nfcdata
 #endif
         }
     else {
+        // Already streamed (has calibrated glu[1]): backfill the raw glu[0] from the scan's
+        // FRAM history so raw is available for the WHOLE buffer, not just stream gaps. Only when
+        // the stored reading matches the scan reading (same id); don't touch glu[1]/streamed flag.
+        const uint16_t rawel = nfcptr?nfcptr->gethistoryglucose(i):0;
+        if(rawel && item->getid()==gluv.getId() && item->glu[0]!=rawel) {
+            item->glu[0]=rawel;
+            if(firstchanged<0)
+                firstchanged=topos;
+            JSENSORLOG("HISTORY raw (backfill): id=%d raw=%d calibrated=%d (mg/L)", item->getid(), rawel, item->glu[1]);
+            }
 #ifndef NOLOG
-        time_t tim=item->gettime();    
+        time_t tim=item->gettime();
         LOGGER("already streamed %d %.1f %s",item->getid(),(float)item->getmgdL()/convfactordL,ctime(&tim));
 #endif
         }

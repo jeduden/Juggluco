@@ -55,6 +55,7 @@ sighandler_t bsd_signal(int signum, sighandler_t handler);
 #include "fromjava.h"
 
 #include "settings/settings.hpp"
+#include "perminraw.hpp"
 #include "datbackup.hpp"
 #include "error_codes.h"
 #ifdef DYNLINK
@@ -394,6 +395,41 @@ extern Sensoren *sensors;
 extern data_t * unlockKeySensor(SensorGlucoseData *usedhist,scanstate *stateptr) ;
  //public static native long getdataptr(String sensorname);
 //int  nusensornr=0,maxsens=4;; SensorGlucoseData ** nusensors=new SensorGlucoseData *[maxsens];
+#ifdef DEBUG
+// Debug-only: fabricate a synthetic sensor with ~24h of readings (some low-quality)
+// so the graph renders without a real sensor. Wired to the "Produce data" menu button.
+extern "C" JNIEXPORT void JNICALL   fromjava(produceDebugData)(JNIEnv *env, jclass cl) {
+    if(!sensors) {
+      LOGAR("produceDebugData: sensors==null");
+      return;
+      }
+    const int ind=sensors->makeDebugSensor();
+    LOGGER("produceDebugData -> sensor index %d\n",ind);
+    }
+#endif
+// Diagnostic: store per-minute RAW values recovered from the Libre 2 BLE stream
+// (Java Libre2Raw decryption) into the in-memory overlay store. Always compiled
+// (the streaming diagnostic build is not a DEBUG build).
+extern "C" JNIEXPORT void JNICALL   fromjava(storeStreamRaw)(JNIEnv *env, jclass cl,jlong nowsec,jint curage,jintArray jids,jintArray jraws) {
+    if(!jids||!jraws)
+        return;
+    const jsize n=env->GetArrayLength(jids);
+    if(n<=0||env->GetArrayLength(jraws)<n)
+        return;
+    jint *ids=env->GetIntArrayElements(jids,nullptr);
+    jint *raws=env->GetIntArrayElements(jraws,nullptr);
+    if(ids&&raws) {
+        for(jsize i=0;i<n;i++) {
+            const int id=ids[i];
+            // time of this minute = now - (current minute - this minute)*60s.
+            // storePerminRaw drops id<0 / raw==0; no need to pre-filter here.
+            const uint32_t t=static_cast<uint32_t>(nowsec-(int64_t)(curage-id)*60);
+            storePerminRaw(id,t,static_cast<uint16_t>(raws[i]));
+            }
+        }
+    if(ids)  env->ReleaseIntArrayElements(jids,ids,JNI_ABORT);
+    if(raws) env->ReleaseIntArrayElements(jraws,raws,JNI_ABORT);
+    }
 extern "C" JNIEXPORT jlong JNICALL   fromjava(getsensorptr)(JNIEnv *env, jclass cl,jlong dataptr) {
     streamdata *sdata=reinterpret_cast<streamdata *>(dataptr);
     if(!sdata) {
@@ -1064,6 +1100,7 @@ extern "C" JNIEXPORT jlong JNICALL   fromjava(processTooth)(JNIEnv *envin, jclas
         decltype(auto) gluc=algres->currentglucose();
         const uint32_t glval= gluc.getValue();
         const float drate=gluc.rate();
+        const bool lowquality=gluc.getQuality()!=0;
         if(jlong res=glucoseback(nu,glval,drate,sdata->hist) ) {
             sensor *senso=sensors->getsensor(sdata->sensorindex);
             sdata->hist->sensorerror=false;
@@ -1076,7 +1113,14 @@ extern "C" JNIEXPORT jlong JNICALL   fromjava(processTooth)(JNIEnv *envin, jclas
             backup->wakebackup(wakestream);
             wakewithcurrent();
 
-            return res;
+            // Low-quality readings ARE forwarded to external apps (GlucoDataHandler,
+            // xDrip, LibreLink, Wear, Gadgetbridge) for data continuity, but with the
+            // alarm bits (>>48) cleared so they never trigger Juggluco's own high/low
+            // alarms on unreliable data, and with a quality flag set in bit 56 so the
+            // Java broadcast can mark the reading as low-quality for receivers.
+            // LibreView/Abbott upload stays gated separately (goodCurrent in
+            // libreview.cpp/newlibre3.cpp).
+            return lowquality?((res & ~(0xFFLL<<48)) | (1LL<<56)):res;
             }
         }
     else

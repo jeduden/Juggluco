@@ -47,6 +47,10 @@ extern JavaVM *getnewvm();
 
 extern "C" jint         subRegisterNatives(JNIEnv*, jclass name, const JNINativeMethod*methods, jint nr);
 #define VISIBLE __attribute__((__visibility__("default")))
+// Unconditional logcat diagnostics (adb logcat -s JuggSensor) for the per-reading
+// algorithm outcome: distinguishes good / low-quality / no-value / duplicate / error.
+#include <android/log.h>
+#define JSENSORLOG(...) __android_log_print(ANDROID_LOG_WARN,"JuggSensor",__VA_ARGS__)
 //#define DYNLINK
 //#undef DYNLINK
 #ifdef DYNLINK
@@ -1325,8 +1329,10 @@ int isinserted=reinterpret_cast<intptr_t>(confinsert.ptr);
 LOGGER("end processStream %ld, %sinserted and %sremoved\n",res, isinserted?"":"not ", isremoved?"":"not ");
 #endif
 
-if(res)
+if(res) {
+    JSENSORLOG("STREAM no-data: Abbott algorithm returned error status=%ld (could not process this packet)", (long)res);
     return nullptr;
+    }
 
 newstate->datpos(FAKE)=state->datpos(FAKE);
 newstate->setpos(COMP,static_cast<data_t *>(compo.ptr));
@@ -1371,22 +1377,34 @@ if(alg) {
         const int qual=gl.getQuality();
         int gid=gl.getId();
         LOGGER("processStream %d %d %.1f\n",gid,qual,gluc/convfactordL);
-        if(!qual&&gluc) {
-            if(hist->savepoll(nutime,gid,gluc,gl.trend(),gl.rate())) {
-                if(streamHistory()) {
+        if(gluc) {
+            if(qual) {
+                LOGGER("saving low quality reading: qual=%d gluc=%d id=%d\n",qual,gluc,gid);
+                JSENSORLOG("STREAM low-quality: glucose=%d mg/dL qual=%d id=%d (saved & shown, no alarm)", gluc, qual, gid);
+                }
+            else {
+                JSENSORLOG("STREAM good: glucose=%d mg/dL id=%d", gluc, gid);
+                }
+            if(hist->savepoll(nutime,gid,gluc,gl.trend(),gl.rate(),qual)) {
+                if(!qual&&streamHistory()) {
                          addStreamHistory(alg->history(), nutime,gid, *hist) ;
                     }
                 return alg;
                 }
             else {
+                JSENSORLOG("STREAM duplicate: id=%d already saved (no new value)", gid);
                 delete alg;
                 return ALGDUP_VALUE;
 
                 }
             }
         else {
+            // Algorithm ran but produced no glucose value (value==0) for this reading.
+            // Returns nullptr, so g.cpp processTooth marks hist->sensorerror=true. Causes:
+            // warm-up/gap, or the algorithm rejecting an out-of-range/noisy reading.
+            JSENSORLOG("STREAM no-value: algorithm produced no glucose this reading id=%d (value==0; warmup/gap or algorithm rejected reading; marks sensorerror)", gid);
             delete alg;
-            LOGSTRING("bad quality\n");
+            LOGSTRING("zero glucose value\n");
             }
         }
 return nullptr;

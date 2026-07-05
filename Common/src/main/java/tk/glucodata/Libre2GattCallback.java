@@ -78,6 +78,41 @@ public class Libre2GattCallback extends SuperGattCallback {
 	boolean pack1 = false, pack2 = false;
 	final byte[] packet = new byte[46];
 
+	// Diagnostic per-minute raw (Libre2Raw): the 6 cipher UID bytes id[0..5], resolved once.
+	// Primary source is the native 8-byte sensor ident (same bytes getserial consumes);
+	// uidFromSerial is only a fallback if the native ident isn't available.
+	private int[] rawuid = null;
+	private boolean rawuidTried = false;
+
+	/** Decrypt the just-assembled BLE packet and store its per-minute raw for the curve overlay. */
+	private void storeStreamRaw(long timmsec) {
+		try {
+			if(!rawuidTried) {
+				rawuidTried = true;
+				final byte[] ident = Natives.getsensorident(dataptr); // 8-byte UID; cipher uses [0..5]
+				if(ident != null && ident.length >= 6) {
+					rawuid = new int[6];
+					for(int i=0;i<6;i++) rawuid[i] = ident[i] & 0xFF;
+					}
+				else
+					rawuid = Libre2Raw.uidFromSerial(SerialNumber); // fallback
+				if(rawuid == null)
+					android.util.Log.e("JuggSensor", SerialNumber+" RAW per-min: no UID (ident="
+							+(ident==null?"null":ident.length+"B")+") - overlay disabled");
+				}
+			if(rawuid == null) return;
+			final Libre2Raw.Result r = Libre2Raw.extract(rawuid, packet);
+			if(r == null || !r.crcValid) {
+				android.util.Log.e("JuggSensor", SerialNumber+" RAW per-min: CRC invalid (decryption mismatch)");
+				return;
+				}
+			Natives.storeStreamRaw(timmsec/1000L, r.age, r.trendId, r.trendRaw);
+			android.util.Log.e("JuggSensor", SerialNumber+" RAW per-min age="+r.age+" cur="+r.trendRaw[0]);
+		} catch(Throwable e) {
+			android.util.Log.e("JuggSensor", SerialNumber+" RAW per-min error: "+e);
+		}
+	}
+
 
 	@SuppressLint("MissingPermission")
 	final void writeBLELogin() {
@@ -127,10 +162,11 @@ static void showCharacter(String label, BluetoothGattCharacteristic characterist
 			showCharacter(SerialNumber+" onDescriptorWrite status="+status, characteristic);
           }
       if(status!=GATT_SUCCESS ) {
+				android.util.Log.e("JuggSensor", SerialNumber+" STREAM-REFUSED: sensor rejected enabling notifications (onDescriptorWrite status="+status+") - disconnecting");
 				bluetoothGatt.disconnect();
             return;
          }
-         
+		android.util.Log.e("JuggSensor", SerialNumber+" stream notifications enabled (waiting for sensor data)");
 		if (sensorgen == 2 && conphase == 1) {
 			writeBLELogin();
 		}
@@ -148,6 +184,19 @@ private PendingIntent onalarm=null;
 			}
 		long tim = System.currentTimeMillis();
 		try {
+			// Unconditional diagnostic (visible in any build via: adb logcat -s JuggSensor)
+			// to distinguish connection problems from data/quality problems.
+			{
+				final String st = newState==BluetoothProfile.STATE_CONNECTED?"CONNECTED"
+						: newState==BluetoothProfile.STATE_DISCONNECTED?"DISCONNECTED":("state"+newState);
+				final String why = status==0?"ok"
+						: status==8?"link supervision timeout (8)"
+						: status==19?"peer/sensor terminated (19)"
+						: status==22?"local host terminated (22)"
+						: status==133?"GATT_ERROR (133)"
+						: status==147?"connection failed/timeout (147)":("status "+status);
+				android.util.Log.e("JuggSensor", SerialNumber+" CONNECTION "+st+" ("+why+")");
+				}
 			if (doLog) {
 				final String[] state = {"DISCONNECTED", "CONNECTING", "CONNECTED", "DISCONNECTING"};
 				{if(doLog) {Log.i(LOG_ID, SerialNumber + " onConnectionStateChange, status:" + status + ", state: " + (newState < state.length ? state[newState] : newState));};};
@@ -164,6 +213,7 @@ private PendingIntent onalarm=null;
 				if(newState == BluetoothProfile.STATE_DISCONNECTED) {
 					if(status == 19) {
 						if(justenablednotification) {
+							android.util.Log.e("JuggSensor", SerialNumber+" STREAM-REFUSED: sensor terminated right after enabling notifications (status 19) - this install lacks valid streaming credentials for the sensor (NFC-scan the running sensor) or the sensor is bonded to another app");
 							Natives.resetbluetooth(dataptr);
 							justenablednotification = false;
 							}
@@ -301,6 +351,10 @@ private PendingIntent onalarm=null;
 		{if(doLog) {Log.i(LOG_ID, "BLE onServicesDiscovered invoked, status: " + status);};};
 //		readrssi=9999; mBluetoothGatt.readRemoteRssi();
 		if(status != GATT_SUCCESS||! m2831x()) {
+			android.util.Log.e("JuggSensor", SerialNumber+" SERVICES "+(status!=GATT_SUCCESS
+					? "discovery failed (status="+status+")"
+					: "streaming service/characteristic not found - sensor not streamable by this install (needs NFC scan/credentials?)")
+					+" - disconnecting");
 			mBluetoothGatt.disconnect();
 			}
 
@@ -326,6 +380,8 @@ private   boolean failedbefore=false;
 	@Override
 	public void onCharacteristicWrite(BluetoothGatt bluetoothGatt, BluetoothGattCharacteristic bluetoothGattCharacteristic, int status) {
 		{if(doLog) {Log.d(LOG_ID, bluetoothGatt.getDevice().getAddress() + " onCharacteristicWrite, status:" + status + " UUID:" + bluetoothGattCharacteristic.getUuid().toString());};};
+		if(status != GATT_SUCCESS)
+			android.util.Log.e("JuggSensor", SerialNumber+" WRITE-FAILED: sensor rejected a characteristic write during streaming setup (status="+status+", uuid="+bluetoothGattCharacteristic.getUuid()+") - often the login/passcode");
 		if (sensorgen == 2)
 			return;
 		try {
@@ -454,13 +510,28 @@ private	void oldonCharacteristicChanged(byte[] value) {
 					pack1 = false;
 					pack2 = false;
 					System.arraycopy(value, 0, packet, 38, 8);
+					// Diagnostic: recover the per-minute RAW signal from the BLE packet by
+					// decrypting it (ported open-source Libre 2 algorithm, see Libre2Raw) and
+					// store it for the teal raw-dot overlay. Juggluco's V2()/P2 path below only
+					// yields the calibrated value; this is the only source of per-minute raw.
+					storeStreamRaw(timmsec);
 					final var newpacket= sensorgen==2?V2(773, tovalue, packet, null):packet;
 					if(newpacket!=null) {
+						android.util.Log.e("JuggSensor", SerialNumber+" PACKET("+newpacket.length+") "+new String(showhex.hexstr(newpacket,0,newpacket.length)));
 						long res = processTooth(dataptr, newpacket);
+						// Classify each stream reading (unconditional): adb logcat -s JuggSensor
+						final String cls = res==1L?"skip/no-new-value"
+								: res==0L?"NO-GLUCOSE (warmup/gap or algorithm error - see native STREAM line)"
+								: ((res>>>56)&1L)!=0L?"LOW-QUALITY reading (sent, no alarm)"
+								: "good reading";
+						android.util.Log.e("JuggSensor", SerialNumber+" STREAM "+cls+" (res=0x"+Long.toHexString(res)+")");
 						if(res!=1L) {
 							handleGlucoseResult(res,timmsec);
 							}
 						}
+						else {
+							android.util.Log.e("JuggSensor", SerialNumber+" BAD-DATA: stream packet failed decryption/validation (V2 returned null) - corrupt or undecryptable data from sensor");
+							}
                     datatime=timmsec;
 					if(wakeLock!=null)
 						wakeLock.release();
@@ -474,6 +545,7 @@ private	void oldonCharacteristicChanged(byte[] value) {
 			;
 			break;
 			default: {
+				android.util.Log.e("JuggSensor", SerialNumber+" BAD-DATA: unexpected stream packet length="+value.length+" (malformed/out-of-sequence sensor data)");
 				{if(doLog) {Log.i(LOG_ID, SerialNumber + " onCharacteristicChanged: wrong length=" + value.length);};};
 			}
 			;

@@ -130,7 +130,17 @@ static public void show(MainActivity act) {
 		     removeContentView(view);
 			(new Backup()).mkbackupview(act);
 
-	}); 
+	});
+        var producedataview=view.findViewById(R.id.producedata);
+        if(tk.glucodata.BuildConfig.DEBUG) {
+                producedataview.setOnClickListener(v ->{
+                        removeContentView(view);
+                        Natives.produceDebugData();
+                        act.requestRender();
+                });
+        }
+        else
+                producedataview.setVisibility(View.GONE);
         var newamountview=view.findViewById(R.id.newamount);newamountview.setOnClickListener(v ->{
 					if(Natives.staticnum()) {
         					help.help(R.string.staticnum,act);

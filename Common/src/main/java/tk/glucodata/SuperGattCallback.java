@@ -180,6 +180,12 @@ static long lastfound() {
 
 static final int mininterval=55;
 static long nexttime=0L; //secs
+// xDrip/AAPS broadcast is throttled separately to ~5 min: every-minute delivery
+// makes AAPS run its loop and upload to Nightscout every minute, which keeps the
+// network radio warm and drains the battery. 285s (<300) so a per-minute reading
+// still clears the gate at the 5-minute mark rather than slipping to 6 minutes.
+static final int xmininterval=285;
+static long xnexttime=0L; //secs
 public static tk.glucodata.GlucoseAlarms glucosealarms=null;
 static notGlucose previousglucose=null;
 static float previousglucosevalue=0.0f;
@@ -262,6 +268,9 @@ static private int low(long tim,notGlucose    sglucose,float gl,float rate,int a
        return alarm;
       }
     static void dowithglucose(String SerialNumber, int mgdl, float gl, float rate, int alarm, long timmsec,long sensorstartmsec,long showtime,int sensorgen) {
+        dowithglucose(SerialNumber, mgdl, gl, rate, alarm, timmsec, sensorstartmsec, showtime, sensorgen, 0);
+        }
+    static void dowithglucose(String SerialNumber, int mgdl, float gl, float rate, int alarm, long timmsec,long sensorstartmsec,long showtime,int sensorgen, int quality) {
 
         if(gl==0.0)
             return;
@@ -367,7 +376,7 @@ static private int low(long tim,notGlucose    sglucose,float gl,float rate,int a
 
 
         if(Natives.getJugglucobroadcast())
-            JugglucoSend.broadcastglucose(SerialNumber,mgdl,gl,rate,alarm,timmsec);
+            JugglucoSend.broadcastglucose(SerialNumber,mgdl,gl,rate,alarm,timmsec,quality);
         if(!isWearable) {
             app.numdata.sendglucose(SerialNumber, tim, gl, thresholdchange(rate), alarm|0x10);
             GlucoseWidget.update();
@@ -379,15 +388,18 @@ static private int low(long tim,notGlucose    sglucose,float gl,float rate,int a
                 if(Natives.geteverSensebroadcast()) EverSense.broadcastglucose(mgdl, rate, timmsec);
                 //SendNSClient.broadcastglucose(mgdl, rate, timmsec);
                 }
-            if(Natives.getxbroadcast())
-                SendLikexDrip.broadcastglucose(mgdl,rate,timmsec,sensorstartmsec,sensorgen);
             if(!isWearable) {
                 if(doWearInt)
                     tk.glucodata.WearInt.sendglucose(mgdl, rate, alarm, timmsec);
 
                 if(doGadgetbridge)
                     Gadgetbridge.sendglucose(sglucose.value,mgdl,gl,rate,timmsec);
-                } 
+                }
+            }
+        if(tim>xnexttime) {
+            xnexttime=tim+xmininterval;
+            if(Natives.getxbroadcast())
+                SendLikexDrip.broadcastglucose(mgdl,rate,timmsec,sensorstartmsec,sensorgen,quality);
             }
 
     }
@@ -419,14 +431,15 @@ protected void handleGlucoseResult(long res,long timmsec) {
         int glumgL = (int) (res & 0xFFFFFFFFL);
         if(glumgL != 0) {
             int alarm = (int) ((res >> 48) & 0xFFL);
-            if(doLog) {Log.i(LOG_ID, SerialNumber + " alarm=" + alarm);};;
+            int quality = (int) ((res >> 56) & 0xFFL); // bit 56 set by native for low-quality readings
+            if(doLog) {Log.i(LOG_ID, SerialNumber + " alarm=" + alarm + " quality=" + quality);};;
 
 
            final float gl = Applic.unit == 1 ? glumgL / (mgdLmult*10.0f) : glumgL/10.0f;
 
             short ratein = (short) ((res >> 32) & 0xFFFFL);
             float rate = ratein / 1000.0f;
-            dowithglucose(SerialNumber, (int)Math.round(glumgL/10.0f),gl,rate, alarm, timmsec,sensorstartmsec,showtime,sensorgen);
+            dowithglucose(SerialNumber, (int)Math.round(glumgL/10.0f),gl,rate, alarm, timmsec,sensorstartmsec,showtime,sensorgen,quality);
             charcha[0] = timmsec;
             if(!isWearable) {
                 if(Natives.gethealthConnect( )) {

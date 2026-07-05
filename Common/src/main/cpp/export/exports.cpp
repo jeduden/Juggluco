@@ -185,7 +185,7 @@ bool sensorexports(myfilep handle, const FG& proc,const FP& print,uint32_t start
 bool currentheader(FILE* handle,int unit,bool calibrated=false) {
 	#define scanhead "Sensorid\tnr\t" DATESTRING "\tTZ\tMin\t"
 	const char raw[]="\tRaw\tdiff";
-	const char headend[]="\tRate\tChangeLabel\n";
+	const char headend[]="\tRate\tChangeLabel\tQuality\n";
 	constexpr const int headstart= sizeof(scanhead)-1;
 	char header[headstart+6+sizeof(headend)+sizeof(raw)+EXTRA]=scanhead;
 	auto units=unitlabels[unit];
@@ -228,10 +228,10 @@ bool fexportscans(myfilep handle, int unit,CurData   (SensorGlucoseData::*proc)(
                  }
               float diff=calconvert-rawconvert;
               const int dec= getgludecimal(unit);
-              fprintf(fp,"%s\t%d\t%u\t%s\t%g\t%d\t%.*f\t%.*f\t%.*f\t%+g\t%s\n",sensorname ,index,scantime,buf,zone,scan->id,dec,calconvert,dec,rawconvert,2,diff,scan->ch,GlucoseNow::trendString[scan->tr]); 
+              fprintf(fp,"%s\t%d\t%u\t%s\t%g\t%d\t%.*f\t%.*f\t%.*f\t%+g\t%s\t%d\n",sensorname ,index,scantime,buf,zone,scan->id,dec,calconvert,dec,rawconvert,2,diff,scan->ch,GlucoseNow::trendString[scan->gettrend()],scan->getquality());
               return true;
                }
-			fprintf(fp,"%s\t%d\t%u\t%s\t%g\t%d\t%.*f\t%+g\t%s\n",sensorname ,index,scantime,buf,zone,scan->id,getgludecimal(unit),rawconvert,scan->ch,GlucoseNow::trendString[scan->tr]); 
+			fprintf(fp,"%s\t%d\t%u\t%s\t%g\t%d\t%.*f\t%+g\t%s\t%d\n",sensorname ,index,scantime,buf,zone,scan->id,getgludecimal(unit),rawconvert,scan->ch,GlucoseNow::trendString[scan->gettrend()],scan->getquality()); 
 			return true;
 			}
 		return false;

@@ -216,6 +216,15 @@
         android:layout_columnWeight="1"
         android:text="@string/darkmode" />
 
+    <Button
+        android:id="@+id/producedata"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_row="0"
+        android:layout_column="5"
+        android:layout_columnWeight="1"
+        android:text="@string/producedata" />
+
     <CheckBox
         android:id="@+id/calibratedscans"
         android:layout_width="wrap_content"

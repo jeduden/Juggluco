@@ -36,9 +36,12 @@ public class JugglucoSend   {
 	private static final String RATE = "glucodata.Minute.Rate";
     private static final String ALARM = "glucodata.Minute.Alarm";
     private static final String TIME = "glucodata.Minute.Time";
+    // Quality of the reading: 0 = good, non-zero = low-quality (e.g. during rapid
+    // glucose change). Receivers can use this to de-emphasize unreliable values.
+    private static final String QUALITY = "glucodata.Minute.Quality";
 private static final String LOG_ID="JugglucoSend";
 
-private static Bundle mkGlucosebundle(String SerialNumber, int mgdl, float gl, float rate, int alarm, long timmsec) {
+private static Bundle mkGlucosebundle(String SerialNumber, int mgdl, float gl, float rate, int alarm, long timmsec, int quality) {
       Bundle extras = new Bundle();
         extras.putString(SERIAL,SerialNumber);
 	extras.putInt(MGDL,mgdl);
@@ -46,6 +49,7 @@ private static Bundle mkGlucosebundle(String SerialNumber, int mgdl, float gl, f
         extras.putFloat(RATE,rate);
         extras.putInt(ALARM,alarm);
         extras.putLong(TIME,timmsec);
+        extras.putInt(QUALITY,quality);
 	return extras;
 	  }
 
@@ -53,13 +57,13 @@ private static String[] names=null;
 public static  void setreceivers() {
 	names=Natives.glucodataRecepters();
 	}
-static void broadcastglucose(String SerialNumber, int mgdl, float gl, float rate, int alarm, long timmsec) {
+static void broadcastglucose(String SerialNumber, int mgdl, float gl, float rate, int alarm, long timmsec, int quality) {
 	if(names==null)
 		return;
-	{if(doLog) {Log.i(LOG_ID,"broadcastglucose "+gl+" rate="+rate);};};
+	{if(doLog) {Log.i(LOG_ID,"broadcastglucose "+gl+" rate="+rate+" quality="+quality);};};
         final Context context=Applic.app;
         Intent intent = new Intent(ACTION);
-	intent.putExtras(mkGlucosebundle(SerialNumber, mgdl, gl, rate, alarm,timmsec));
+	intent.putExtras(mkGlucosebundle(SerialNumber, mgdl, gl, rate, alarm,timmsec,quality));
 	intent.addFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES);
 	for(var name:names) {
 		if(name!=null) {

@@ -28,6 +28,8 @@
 #include <time.h>
 #include <limits.h>
 #include <array>
+#include <cmath>
+#include <cstdio>
 #include "inout.hpp"
 #include "SensorGlucoseData.hpp"
 #include "settings/settings.hpp"
@@ -342,6 +344,47 @@ void   deletelast() {
       #endif
       return lastpos;
    }
+#ifdef DEBUG
+   // Debug-only: fabricate a sensor with ~24h of 1-minute readings, scattered
+   // low-quality (quality!=0) points, so the curve renders without a real sensor.
+   // Wired to the "Produce data" debug menu button. Returns the sensor index.
+   int makeDebugSensor() {
+      const uint32_t now=(uint32_t)time(nullptr);
+      constexpr int minutes=24*60;
+      const uint32_t start=now-(uint32_t)minutes*60;
+      char buf[24];
+      snprintf(buf,sizeof(buf),"DBG%013llu",(unsigned long long)(now%10000000000000ULL));
+      std::array<char,16> name;
+      memcpy(name.data(),buf,16);
+      const pathconcat sensordir(inbasedir,name);
+      SensorGlucoseData::mkdatabaseDebug(sensordir,start);
+      const int ind=addsensor(std::string_view(name.data(),name.size()));
+      sensor *sen=getsensor(ind);
+      sen->initialized=true;
+      sen->halfdays=15*2;
+      SensorGlucoseData *sens=getSensorData(ind);
+      if(!sens)
+          return -1;
+      constexpr double TAU=6.283185307179586;
+      double prevmg=130.0;
+      for(int i=0;i<minutes;i++) {
+          const uint32_t t=start+(uint32_t)i*60;
+          const double ph=(double)i/minutes;
+          double mg=130.0+55.0*std::sin(ph*TAU*3.0)+18.0*std::sin(ph*TAU*11.0);
+          if(mg<45.0) mg=45.0; else if(mg>310.0) mg=310.0;
+          const float change=(float)(mg-prevmg);
+          prevmg=mg;
+          // wide (~55 min) low-quality blocks, one every 4h (~6 over 24h), so the
+          // semi-transparent low-quality rendering is clearly visible on the curve.
+          const int phase240=i%240;
+          const int quality=(phase240>=40&&phase240<95)?1:0;
+          sens->savepoll(t,i,(int)std::lround(mg),0,change,quality);
+          }
+      sens->getinfo()->lastscantime=now;
+      LOGGER("makeDebugSensor -> index %d, %d readings\n",ind,minutes);
+      return ind;
+      }
+#endif
    const sensor *getsensor(const int ind) const {
       return sensorlist() + ind;
    }

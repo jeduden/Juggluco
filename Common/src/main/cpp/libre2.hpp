@@ -34,6 +34,7 @@
 #include "nfcdata.hpp"
 #include "sensoren.hpp"
 #include "jnisub.hpp"
+#include "perminraw.hpp"
 #define VISIBLE __attribute__((__visibility__("default")))
 
 extern Sensoren *sensors;
@@ -162,6 +163,11 @@ public:
 		pathconcat uit(hist->getsensordir(),rawstream);
 		blueuit=open(uit.data(),O_APPEND|O_CREAT|O_WRONLY, S_IRUSR |S_IWUSR);
 #endif
+		{   // Diagnostic: load any persisted per-minute raw for this sensor into the
+		    // overlay store so the teal dots are present right after an app restart.
+			pathconcat ppath(hist->getsensordir(),"perminraw.dat");
+			loadPerminRaw(ppath.data());
+			}
 
 //		hist->mutex.unlock();
 

@@ -66,6 +66,7 @@ using namespace std::literals;
 #include "settings/settings.hpp"
 
 #include "SensorGlucoseData.hpp"
+#include "perminraw.hpp"
 #include "sensoren.hpp"
 #include "nums/numdata.hpp"
 #include "nfcdata.hpp"
@@ -889,20 +890,21 @@ template <class TX,class TY> void JCurve::showlineScan(NVGcontext* avg,const Sca
     bool restart=true;
     nvgBeginPath(avg);
     const NVGcolor *col=getcolor(colorindex);
+    const NVGcolor lowqualcol=nvgRGBAf2(col->r, col->g, col->b, col->a*0.45f);
     nvgStrokeColor(avg, *col);
     nvgFillColor(avg,*col);
     nvgStrokeWidth(avg, pollCurveStrokeWidth);
     uint32_t late=0;
     float startx=-1000,starty=-1000;
+    bool wasLowQuality=false;
+    int dashcount=0;
+    constexpr int dashon=2,dashperiod=4; // dashed rendering for low-quality stretches
     for(const ScanData *it=low;it!=high;it++) {
         if(it->valid()) {
             const uint32_t tim= it->t;
             const auto glu=it->g*10;
             const auto posx= transx(tim),posy=transy(glu);
-/*#ifndef NOLOG
-time_t ttim=tim;
-            CURVELOGGER("showlineScan posx=%f tim=%ud %s",posx,tim,ctime(&ttim));
-#endif */
+            const bool isLowQuality=(it->getquality()!=0);
 
             if(!restart&&tim>late) {
                 nvgStroke(avg);
@@ -913,25 +915,58 @@ time_t ttim=tim;
                      }
                 restart=true;
                 }
-            if(restart) {
+            if(!restart&&isLowQuality!=wasLowQuality) {
+                nvgLineTo(avg, posx,posy);
+                nvgStroke(avg);
+                nvgStrokeColor(avg, isLowQuality?lowqualcol:*col);
+                nvgFillColor(avg, isLowQuality?lowqualcol:*col);
+                nvgBeginPath(avg);
+                nvgMoveTo(avg, posx,posy);
+                startx=posx;starty=posy;
+                dashcount=0;
+                }
+            else if(restart) {
+                nvgStrokeColor(avg, isLowQuality?lowqualcol:*col);
+                nvgFillColor(avg, isLowQuality?lowqualcol:*col);
                 nvgBeginPath(avg);
                  nvgMoveTo(avg, posx,posy);
                  startx=posx,starty=posy;
                  restart=false;
+                 dashcount=0;
+                 }
+            else if(isLowQuality) {
+                 // Dashed thin line for low-quality stretches: de-emphasized, not thickened.
+                 // At ~1 reading/min a per-point dot would overlap into a thick band; dashes
+                 // keep it a thin dimmed line that reads as lower-confidence data.
+                 if((dashcount++%dashperiod)<dashon) {
+                     startx=starty=-1000.0f;
+                     nvgLineTo(avg, posx,posy);
+                     }
+                 else {
+                     nvgStroke(avg);
+                     nvgBeginPath(avg);
+                     nvgMoveTo(avg, posx,posy);
+                     startx=posx;starty=posy;
+                     }
                  }
             else {
                  startx=starty=-1000.0f;
                 nvgLineTo( avg,posx,posy);
                 }
 
+            wasLowQuality=isLowQuality;
             late=tim+dif;
 
             if(glucosepointinfo(avg,tim,glu, posx, posy) ) {
                 nvgLineTo( avg,posx,posy);
                 nvgStroke(avg);
+                nvgStrokeColor(avg, *col);
+                nvgFillColor(avg, *col);
                 nvgBeginPath(avg);
                 nvgCircle(avg, posx,posy,pointRadius*1.3);
                 nvgFill(avg);
+                nvgStrokeColor(avg, isLowQuality?lowqualcol:*col);
+                nvgFillColor(avg, isLowQuality?lowqualcol:*col);
                 nvgBeginPath(avg);
                 nvgMoveTo(avg, posx,posy);
                 lasttouchedcolor=colorindex;
@@ -2023,9 +2058,58 @@ displaytime disp=getdisplaytime(nu,starttime2,endtime, transx);
         for(int i=histlen-1;i>=0;i--) {
             int index= hists[i];
             int colorindex=segcolor(index,2);
-             histcurve(avg,sensors->getSensorData(index), histpositions[i].first, histpositions[i].second,transx,transy,colorindex); 
+             histcurve(avg,sensors->getSensorData(index), histpositions[i].first, histpositions[i].second,transx,transy,colorindex);
+             // Diagnostic: overlay the RAW history value (Glucose::getraw(), glu[0]) as distinct
+             // teal DOTS (no connecting line), so raw is visibly separate from the calibrated curve.
+             {
+                const auto *his=sensors->getSensorData(index);
+                if(!(his->isDexcom()&&!settings->data()->dexcomPredict)) {
+                    nvgFillColor(avg, nvgRGBA(0,170,210,255)); // teal = raw
+                    for(auto pos=histpositions[i].first,last=histpositions[i].second;pos<=last;pos++) {
+                        const Glucose *hg=his->getglucose(pos);
+                        if(hg->valid()) {
+                            const uint32_t raw=hg->getraw();
+                            if(raw) {
+                                const float posx=transx(hg->gettime()),posy=transy(raw);
+                                nvgBeginPath(avg);
+                                nvgCircle(avg, posx,posy,pointRadius*0.85f);
+                                nvgFill(avg);
+                                }
+                            }
+                        }
+                    }
+                }
              }
         }
+
+    // Diagnostic: per-minute RAW recovered from the Libre 2 BLE stream (ported
+    // decryption, stored via Natives.storeStreamRaw). Same teal color as the 15-min
+    // FRAM raw dots above, but populated on every 2-min packet so recent minutes fill
+    // in densely. Gated like the FRAM raw dots (showhistories).
+    if(showhistories) {
+        const uint32_t from=static_cast<uint32_t>(starttime2), to=static_cast<uint32_t>(endtime);
+        // Snapshot only the in-window points under the lock - entries are id-ordered
+        // (hence time-ordered within a sensor), so stop once past the window - then draw
+        // lock-free so the BLE writer thread is never blocked across NanoVG calls.
+        static thread_local std::vector<PerminRawPt> snap;
+        snap.clear();
+        {
+            std::lock_guard<std::mutex> lk(g_perminRawMutex);
+            for(const auto &kv:g_perminRaw) {
+                const PerminRawPt &pt=kv.second;
+                if(pt.time>to) break;
+                if(pt.time>=from) snap.push_back(pt);
+                }
+        }
+        if(!snap.empty()) {
+            nvgFillColor(avg, nvgRGBA(0,170,210,255)); // teal = raw
+            for(const PerminRawPt &pt:snap) {
+                nvgBeginPath(avg);
+                nvgCircle(avg, transx(pt.time),transy(pt.raw),pointRadius*0.55f);
+                nvgFill(avg);
+                }
+            }
+    }
 
     if(showcalibratedhistories) {
         nvgStrokeWidth(avg, historyStrokeWidth);
@@ -2646,7 +2730,7 @@ int    JCurve::showLargevalue(NVGcontext* avg, int index,float getx,float gety,f
     #ifdef JUGGLUCO_APP
     #ifndef DONTTALK
         shownglucose[index].glucosevalue=convglucose;
-        shownglucose[index].glucosetrend=poll->tr;
+        shownglucose[index].glucosetrend=poll->gettrend();
 #endif
 #endif
          float valuex=getx-(convglucose>=10.0f?density*20.0f:0.0f);

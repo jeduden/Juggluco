@@ -154,6 +154,9 @@ uint32_t gettime() const {
     return t;
     };
  uint32_t getid() const {return id;};
+ int gettrend() const { return static_cast<int>(static_cast<uint32_t>(tr)&0xFFFFu); };
+ int getquality() const { return static_cast<int>((static_cast<uint32_t>(tr)>>16)&0xFFFFu); };
+ static int32_t encodetr(int trend, int quality) { return static_cast<int32_t>(((static_cast<uint32_t>(quality)&0xFFFFu)<<16)|(static_cast<uint32_t>(trend)&0xFFFFu)); };
 bool valid(int pos=1) const {
     if(pos&&!t) {
         ScanData *ht=const_cast<ScanData*>(this);
@@ -166,6 +169,9 @@ bool valid(int pos=1) const {
     }
 bool current(int pos=1) const {
     return valid(pos)&&!isnan(ch);
+    }
+bool goodCurrent(int pos=1) const {
+    return current(pos)&&!getquality();
     }
 float inappunit() const {
        return ::gconvert(g*10);
@@ -1156,6 +1162,25 @@ static bool mkdatabase(string_view sensordir,time_t start,const  char *uid,const
     settings->data()->haslibre2=true;
     return true;
     }
+#ifdef DEBUG
+// Debug-only: create a synthetic Libre 2-style sensor database (interval=60, no
+// special type flags -> isLibre2()) so the "Produce data" debug button can
+// fabricate readings without a real sensor. See Sensoren::makeDebugSensor().
+static bool mkdatabaseDebug(string_view sensordir,time_t start) {
+    LOGGER("mkdatabaseDebug %s,%s",sensordir.data(),ctime(&start));
+    mkdir(sensordir.data(),0700);
+    pathconcat infoname(sensordir,infopdat);
+    constexpr uint16_t wear=14*24*60;
+    constexpr uint8_t days=wear/(60*24)+1;
+    Info inf{.starttime=(uint32_t)start,.lastscantime=(uint32_t)start,.starthistory=0,.endhistory=0,.scancount=0,.startid=0,.interval=60,.dupl=3,.days=days,.warmup=60,.wearduration=wear,.pollcount=0,.lockcount=0};
+    inf.ident.len=8;
+    inf.info.len=6;
+    inf.bluestart=(uint32_t)start;
+    writeall(infoname,&inf,sizeof(inf));
+    settings->data()->haslibre2=true;
+    return true;
+    }
+#endif
 /*
 E007-0M0063KNUJ0
 E07A-XX068ZMRF18              
@@ -1626,7 +1651,7 @@ void saveglucose(const nfcdata*nfc,time_t tim,int id,int glu,int trend,float cha
     setlastscantime(tim);
     }
 
-bool savepoll(time_t tim,int id,int glu,int trend,float change) {
+bool savepoll(time_t tim,int id,int glu,int trend,float change,int quality=0) {
     if(getinfo()->pollcount) {
         int count=getinfo()->pollcount-1;
         int previd=polls[count].id;
@@ -1634,7 +1659,7 @@ bool savepoll(time_t tim,int id,int glu,int trend,float change) {
             LOGGER("GLU: duplicate id: previd=%d id=%d\n",previd,id);
             return false;
             }
-        uint32_t prevt=polls[count].t;        
+        uint32_t prevt=polls[count].t;
         uint32_t predict =prevt+(id-previd)*getinfo()->pollinterval;
         const int verschil=tim-predict;
         if(verschil>3*60)   {
@@ -1646,7 +1671,7 @@ bool savepoll(time_t tim,int id,int glu,int trend,float change) {
             getinfo()->pollinterval= weight*getinfo()->pollinterval+(1.0-weight)*af;
             }
         }
-    saveglucosedata(polls,getinfo()->pollcount,tim, id, glu, trend, change);
+    saveglucosedata(polls,getinfo()->pollcount,tim, id, glu, trend, change, quality);
     return true;
     }
 
@@ -1657,7 +1682,7 @@ bool savestreamonly(time_t tim,int id,int glu,int trend,float change) {
              if(polls[prev].id>=id)
                 return false;
              }
-     polls[count]={static_cast<uint32_t>(tim),id,glu,trend,change};
+     polls[count]={static_cast<uint32_t>(tim),id,glu,ScanData::encodetr(trend,0),change};
      ++getinfo()->pollcount;
      return true;
     }
@@ -1682,7 +1707,7 @@ bool saveStreamAgain(time_t tim,int id,int glu,int trend,float change) {
      while(index<getinfo()->pollcount&&polls[index].id<id) {
         ++index;
         }
-     polls[index]={static_cast<uint32_t>(tim),id,glu,trend,change};
+     polls[index]={static_cast<uint32_t>(tim),id,glu,ScanData::encodetr(trend,0),change};
      const int count=index+1;
      if(count<getinfo()->pollcount) {
         return true;
@@ -1690,8 +1715,8 @@ bool saveStreamAgain(time_t tim,int id,int glu,int trend,float change) {
     getinfo()->pollcount=count;
     return false;
     }
-void saveglucosedata(Mmap<ScanData> &streamscans,uint32_t &count,time_t tim,int id,int glu,int trend,float change) {
-     streamscans[count++]={static_cast<uint32_t>(tim),id,glu,trend,change};
+void saveglucosedata(Mmap<ScanData> &streamscans,uint32_t &count,time_t tim,int id,int glu,int trend,float change,int quality=0) {
+     streamscans[count++]={static_cast<uint32_t>(tim),id,glu,ScanData::encodetr(trend,quality),change};
     }
 bool hasStreamID(const int id,const uint32_t eventtime) const {
     return polls[id].id==id&&polls[id].g&&!isnan(polls[id].getchange())&&abs((int)(polls[id].gettime()-eventtime))<60;
@@ -1726,7 +1751,7 @@ template <int secs,bool libre3=true> int savepollallIDsonly(time_t tim,const int
           }
       }
     LOGGER("count=%d savepollallIDsonly(%lu,%d,%.1f,%d,%.1f) %s",count,tim,id,glu/convfactordL,trend,change,ctime(&tim));
-    polls[id]={static_cast<uint32_t>(tim),id,glu,trend,change};
+    polls[id]={static_cast<uint32_t>(tim),id,glu,ScanData::encodetr(trend,0),change};
     return count;
     }
 
@@ -1829,12 +1854,17 @@ const ScanData *lastpoll() const {
     return nullptr;
     }
 const ScanData *lastValidStream() const {
+    const ScanData *lowqual=nullptr;
     for(int i=pollcount()-1;i>=0;--i) {
         const ScanData *el= polls.data()+i;
-        if(el->valid())
-                return el;
+        if(el->valid()) {
+                if(!el->getquality())
+                    return el;
+                if(!lowqual)
+                    lowqual=el;
+                }
         }
-    return nullptr;
+    return lowqual;
     }
 const ScanData *getscan(int ind) const {
     return scans.data()+ind;
@@ -1846,7 +1876,7 @@ static void exportscans(const char *file,int count,const ScanData *scans)  {
     std::ofstream uit(file);
     for(int i=0;i<count;i++) {
         const ScanData &scan=scans[i];    
-        uit<<scan.t<<"\t"<<scan.id<<'\t'<<scan.g<<'\t'<<scan.tr<<'\t'<<scan.ch<<std::endl;
+        uit<<scan.t<<"\t"<<scan.id<<'\t'<<scan.g<<'\t'<<scan.gettrend()<<'\t'<<scan.ch<<'\t'<<scan.getquality()<<std::endl;
         }
     uit.close();
     }
